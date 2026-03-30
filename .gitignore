@@ -38,6 +38,7 @@ Thumbs.db
 
 # Deployment
 deployment.json
+!public/deployment.json
 deployments/
 
 # Testing
