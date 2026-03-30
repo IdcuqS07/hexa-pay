@@ -1,100 +1,99 @@
-# 🛡️ HexaPay - Secure Encrypted Payments
+# HexaPay
 
-A flagship web project built with **Vite** as the foundation, featuring an encrypted payment platform using Fully Homomorphic Encryption (FHE) technology from Fhenix.
+HexaPay is a confidential finance product built on Fhenix. It combines private treasury operations, company identity, confidential invoice workflows, and scoped compliance or analytics modules into one product surface.
 
-## ✨ Design Features
+The current repository includes:
 
-- **Modern & Minimalist**: Clean design with focus on user experience
-- **Gradient & Animations**: Smooth and professional visual effects
-- **Responsive Design**: Optimal display on all devices
-- **Performance Optimized**: Built with Vite for super fast loading
-- **Interactive Elements**: Scroll animations, hover effects, and particle system
-- **Dark Theme**: Elegant and modern dark theme
+- a public product homepage
+- a focused app surface for treasury, company, invoices, and masked activity
+- a deeper workspace for contract-level operations and diagnostics
+- a Solidity contract suite for confidential balances, invoices, escrow, compliance, and analytics
 
-## 🚀 Technology
+## Product Features
 
-- **Vite** - Modern and super fast build tool
-- **Vanilla JavaScript** - Pure JS without framework for maximum performance
-- **CSS3** - Modern animations and visual effects
-- **Google Fonts** - Professional typography (Inter & Space Grotesk)
+- Private treasury: wrap into the confidential rail, keep balances masked by default, and send encrypted internal payments.
+- Company registry: register operating companies, manage signer roles, and prepare business identities before invoice activity starts.
+- Confidential invoices: create, approve, pay, and inspect outstanding balances without exposing raw invoice amounts publicly.
+- Privacy controls: keep local reveal intentional, align wallet and chain state, and preserve a calmer masked product view.
+- Compliance workspace: support scoped audit access and structured disclosure flows through dedicated modules.
+- Confidential analytics: support sealed reporting and business checkpoints for treasury and finance operations.
+- Escrow and dispute readiness: the contract suite already includes escrow and dispute-oriented modules for broader financial workflows.
 
-## 📦 Installation
+## Product Surfaces
+
+- `index.html`: HexaPay home and product overview
+- `app.html`: product-facing app for day-to-day private finance flows
+- `hexapay.html`: deeper operations workspace and contract console
+
+## Repository Layout
+
+```text
+Fhenix Buildathon/
+├── contracts/              # HexaPay core, workflow, escrow, compliance, analytics, vault, factory
+├── scripts/                # Deployment, wallet setup, wrap bootstrap, and interaction helpers
+├── src/                    # App, workspace, client runtime, and shared styling
+├── test/                   # Hardhat test suite for core and module behaviors
+├── app.html                # HexaPay App entry
+├── hexapay.html            # HexaPay Workspace entry
+├── index.html              # Product homepage entry
+├── README_CONTRACTS.md     # Contract architecture and function summary
+├── ROADMAP_HEXAPAY.md      # Product and contract roadmap
+└── package.json
+```
+
+## Quick Start
 
 ```bash
-# Install dependencies
 npm install
-
-# Run development server
 npm run dev
+```
 
-# Build for production
+Local entry points:
+
+- `http://localhost:3000/` or the Vite port you run locally for the product homepage
+- `/app.html` for HexaPay App
+- `/hexapay.html` for HexaPay Workspace
+
+## Core Scripts
+
+```bash
+# Frontend
+npm run dev
 npm run build
-
-# Preview production build
 npm run preview
+
+# Contracts
+npm run compile
+npm run test
+
+# Deployment and setup
+npm run deploy
+npm run deploy:token
+npm run bootstrap-wrap
+npm run setup-wallet
+npm run interact
 ```
 
-## 🎨 Project Structure
+## Contract Suite
 
-```
-hexapay-fhenix/
-├── index.html              # Entry point HTML
-├── vite.config.js          # Vite configuration
-├── package.json            # Dependencies
-├── src/
-│   ├── main.js            # Main JavaScript
-│   └── styles/
-│       └── main.css       # Complete styling
-└── README.md
-```
+HexaPay is structured as a modular confidential finance suite:
 
-## 🎯 Key Features
+- `HexaPay.sol`: confidential balance rail, wrap and unwrap, private transfers, compliance base, company registry
+- `HexaPayWorkflowModule.sol`: confidential invoices, payroll, and policy-based approvals
+- `HexaPayEscrowModule.sol`: escrow funding, milestone release, refunds, disputes
+- `HexaPayComplianceModule.sol`: scoped compliance rooms, audit artifacts, access logs
+- `HexaPayAnalyticsModule.sol`: sealed reporting and checkpoint flows
+- `HexaPayVault.sol`: settlement token custody
+- `HexaPayFactory.sol`: suite deployment
 
-1. **Hero Section** with gradient animations and particle effects
-2. **Features Grid** with 6 main features and hover animations
-3. **Technology Section** with interactive FHE visualization
-4. **Security Layers** displaying 4 security layers
-5. **CTA Section** with gradient background
-6. **Responsive Footer** with complete navigation
+More detail is documented in [README_CONTRACTS.md](./README_CONTRACTS.md).
 
-## 🎨 Design Highlights
+## Roadmap
 
-- **Color Palette**: Indigo & Purple gradient with dark theme
-- **Typography**: Inter for body text, Space Grotesk for headings
-- **Animations**: Smooth scroll, fade-in effects, hover transitions
-- **Layout**: CSS Grid & Flexbox for responsive design
-- **Effects**: Backdrop blur, box shadows, gradient overlays
+The active roadmap is tracked in [ROADMAP_HEXAPAY.md](./ROADMAP_HEXAPAY.md). The main direction is to keep HexaPay as one product while scaling through focused modules for workflow, escrow, compliance, and analytics.
 
-## 🌐 Browser Support
+## Environment Notes
 
-- Chrome (latest)
-- Firefox (latest)
-- Safari (latest)
-- Edge (latest)
-
-## 📱 Responsive Breakpoints
-
-- Desktop: 1280px+
-- Tablet: 768px - 1279px
-- Mobile: < 768px
-
-## 🔧 Customization
-
-All color and spacing variables can be changed in `:root` within `main.css`:
-
-```css
-:root {
-  --primary: #6366f1;
-  --secondary: #8b5cf6;
-  --dark: #0f172a;
-  /* ... */
-}
-```
-
-## 📄 License
-
-MIT License - Free to use for personal and commercial projects.
-
----
-
-**Built with ❤️ using Vite**
+- Copy `.env.example` into `.env` before running deployment or network-specific scripts.
+- `deployment.json` is intentionally ignored from git in the current setup.
+- The app currently targets Arbitrum Sepolia for the live product flow and Fhenix tooling for encrypted operations.
