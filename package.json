@@ -1,0 +1,34 @@
+{
+  "name": "hexapay-fhenix",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy": "hardhat run scripts/deploy.js --network arb-sepolia",
+    "deploy:token": "hardhat run scripts/deploy-token.js --network arb-sepolia",
+    "bootstrap-wrap": "hardhat run scripts/bootstrap-wrap.js --network arb-sepolia",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "node": "hardhat node",
+    "setup-wallet": "node scripts/setup-wallet.js",
+    "check-balance": "hardhat run scripts/check-balance.js --network arb-sepolia",
+    "interact": "hardhat run scripts/interact.js --network arb-sepolia"
+  },
+  "dependencies": {
+    "gsap": "^3.12.5"
+  },
+  "devDependencies": {
+    "@fhenixprotocol/cofhe-contracts": "^0.0.13",
+    "@fhenixprotocol/cofhe-mock-contracts": "^0.3.1",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "5.0.0",
+    "cofhe-hardhat-plugin": "^0.3.1",
+    "cofhejs": "^0.3.1",
+    "dotenv": "^16.3.1",
+    "hardhat": "^2.28.6",
+    "vite": "^5.2.0"
+  }
+}

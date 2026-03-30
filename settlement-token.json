@@ -1,0 +1,11 @@
+{
+  "network": "arb-sepolia",
+  "chainId": 421614,
+  "address": "0xe378E93D5eC4dDa719355c5274d85e97c3a0A500",
+  "name": "HexaPay USD",
+  "symbol": "hxUSD",
+  "decimals": 18,
+  "totalSupply": "1000000000000000000000000",
+  "deployer": "0x7119d53f0241F16c96b521ccF862473e18a29d6b",
+  "deployedAt": "2026-03-29T20:50:39.065Z"
+}
