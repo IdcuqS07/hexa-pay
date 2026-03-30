@@ -42,3 +42,4 @@ deployments/
 
 # Testing
 .nyc_output/
+.vercel
