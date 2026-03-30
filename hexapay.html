@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="HexaPay workspace for confidential treasury, invoice workflow, and controlled disclosure operations.">
+  <title>HexaPay | Operations Layer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/styles/main.css">
+</head>
+<body class="subpage-body">
+  <main class="subpage-shell">
+    <a class="subpage-back" href="./index.html">Back to HexaPay Home</a>
+    <div class="subpage-bridge" data-entry-context>
+      HexaPay is the secure workspace for treasury, invoices, and controlled disclosure operations.
+    </div>
+
+    <section class="subpage-hero">
+      <div class="subpage-badge" data-entry-badge>HexaPay</div>
+      <h1>Operational console for confidential treasury and invoice execution.</h1>
+      <p>
+        HexaPay product surfaces privacy and trust at the top level. This workspace carries that
+        system into live manifest control, confidential balance reads, encrypted payments, and the
+        invoice workflow already proven in-browser on Arbitrum Sepolia.
+      </p>
+      <div class="subpage-actions">
+        <a class="btn-primary btn-xl" href="./index.html">Return to HexaPay Home</a>
+        <a class="btn-outline btn-xl" href="./app.html">Return to HexaPay App</a>
+      </div>
+    </section>
+
+    <section class="subpage-proof-strip">
+      <article class="subpage-proof">
+        <span>Rollout</span>
+        <strong>Arbitrum Sepolia live</strong>
+        <p>Manifest import, module discovery, and wallet-aligned reads are wired into the console.</p>
+      </article>
+      <article class="subpage-proof">
+        <span>Confidential treasury</span>
+        <strong>CoFHE ready</strong>
+        <p>Sealed balance reads, local unseal, wrap flow, and encrypted internal payment are operational.</p>
+      </article>
+      <article class="subpage-proof">
+        <span>Invoice workflow</span>
+        <strong>Create to settlement</strong>
+        <p>Create, approve, pay, and re-read outstanding without leaving the browser workspace.</p>
+      </article>
+    </section>
+
+    <section id="hexapay-modules" class="subpage-grid">
+      <article class="subpage-card">
+        <span>Setup</span>
+        <h3>Workspace launch</h3>
+        <p>Import the latest deployment, inspect module health, and register companies before funds move.</p>
+      </article>
+      <article class="subpage-card">
+        <span>Treasury</span>
+        <h3>Confidential balance and payments</h3>
+        <p>Approve, wrap, read private balance, and send encrypted internal payments from one lane.</p>
+      </article>
+      <article class="subpage-card">
+        <span>Invoicing</span>
+        <h3>Issue, approve, and settle</h3>
+        <p>Move through the invoice lifecycle with the company and payer roles clearly separated.</p>
+      </article>
+      <article class="subpage-card">
+        <span>Extended</span>
+        <h3>Policy, escrow, and reporting</h3>
+        <p>Keep workflow policy, escrow, compliance, and analytics tools available without cluttering the primary demo paths.</p>
+      </article>
+    </section>
+
+    <section id="hexapay-workspace" class="hx-shell" data-hexapay-app></section>
+  </main>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

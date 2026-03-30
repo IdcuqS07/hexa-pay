@@ -1,0 +1,18 @@
+{
+  "network": "arb-sepolia",
+  "account": "0x7119d53f0241F16c96b521ccF862473e18a29d6b",
+  "token": "0xe378E93D5eC4dDa719355c5274d85e97c3a0A500",
+  "vault": "0x6BF49B5D09dE43E75D692DF3299B46c077898f06",
+  "core": "0xceac99B0CCb3c2418A0b59d751AD3d95E039dc60",
+  "amountInput": "100",
+  "amountUnits": "100000000000000000000",
+  "approveHash": "0x220c909106a0c9af086896f82016277995e5590a94163efdaa38fbfd86d2c670",
+  "wrapHash": "0xc272fd79bf91322b1f75f2bfe16a3f78f717fa9ba6e9eecdc4c508e2cc26fe20",
+  "walletBalanceBefore": "999900000000000000000000",
+  "walletBalanceAfter": "999800000000000000000000",
+  "allowanceBefore": "0",
+  "allowanceAfter": "0",
+  "backingBefore": "0",
+  "backingAfter": "100000000000000000000",
+  "updatedAt": "2026-03-30T05:55:17.689Z"
+}
