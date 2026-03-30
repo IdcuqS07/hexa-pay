@@ -25,6 +25,20 @@ The current repository includes:
 - `app.html`: product-facing app for day-to-day private finance flows
 - `hexapay.html`: deeper operations workspace and contract console
 
+## Live Contract Addresses
+
+Current deployment target: `Arbitrum Sepolia`
+
+- Explorer base: <https://sepolia.arbiscan.io>
+- Factory: [`0xE39da42fED8fCB816f20F0176e1A4c94213c133c`](https://sepolia.arbiscan.io/address/0xE39da42fED8fCB816f20F0176e1A4c94213c133c)
+- HexaPay Core: [`0xceac99B0CCb3c2418A0b59d751AD3d95E039dc60`](https://sepolia.arbiscan.io/address/0xceac99B0CCb3c2418A0b59d751AD3d95E039dc60)
+- Vault: [`0x6BF49B5D09dE43E75D692DF3299B46c077898f06`](https://sepolia.arbiscan.io/address/0x6BF49B5D09dE43E75D692DF3299B46c077898f06)
+- Workflow Module: [`0xA38c0195e312f2354F4aC186b165e538aE388Cc9`](https://sepolia.arbiscan.io/address/0xA38c0195e312f2354F4aC186b165e538aE388Cc9)
+- Escrow Module: [`0x6e2C9137A773d3E36Ef0F9aF07899D92E32170b1`](https://sepolia.arbiscan.io/address/0x6e2C9137A773d3E36Ef0F9aF07899D92E32170b1)
+- Compliance Module: [`0x2b86C5E67287FC29AA7fa1f02a487EeA00227207`](https://sepolia.arbiscan.io/address/0x2b86C5E67287FC29AA7fa1f02a487EeA00227207)
+- Analytics Module: [`0x66BA4df1eaAdcd4c32B1843BF283eD89A006a9d7`](https://sepolia.arbiscan.io/address/0x66BA4df1eaAdcd4c32B1843BF283eD89A006a9d7)
+- Settlement Token: [`0xe378E93D5eC4dDa719355c5274d85e97c3a0A500`](https://sepolia.arbiscan.io/address/0xe378E93D5eC4dDa719355c5274d85e97c3a0A500)
+
 ## Repository Layout
 
 ```text
