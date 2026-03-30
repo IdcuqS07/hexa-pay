@@ -1,0 +1,27 @@
+{
+  "network": "arb-sepolia",
+  "chainId": 421614,
+  "factory": "0xE39da42fED8fCB816f20F0176e1A4c94213c133c",
+  "core": "0xceac99B0CCb3c2418A0b59d751AD3d95E039dc60",
+  "hexaPay": "0xceac99B0CCb3c2418A0b59d751AD3d95E039dc60",
+  "vault": "0x6BF49B5D09dE43E75D692DF3299B46c077898f06",
+  "workflowModule": "0xA38c0195e312f2354F4aC186b165e538aE388Cc9",
+  "escrowModule": "0x6e2C9137A773d3E36Ef0F9aF07899D92E32170b1",
+  "complianceModule": "0x2b86C5E67287FC29AA7fa1f02a487EeA00227207",
+  "analyticsModule": "0x66BA4df1eaAdcd4c32B1843BF283eD89A006a9d7",
+  "settlementToken": "0xe378E93D5eC4dDa719355c5274d85e97c3a0A500",
+  "owner": "0x7119d53f0241F16c96b521ccF862473e18a29d6b",
+  "feeCollector": "0x7119d53f0241F16c96b521ccF862473e18a29d6b",
+  "deployedAt": "2026-03-30T05:55:00.366Z",
+  "deployer": "0x7119d53f0241F16c96b521ccF862473e18a29d6b",
+  "ui": {
+    "chainId": 421614,
+    "addresses": {
+      "core": "0xceac99B0CCb3c2418A0b59d751AD3d95E039dc60",
+      "workflow": "0xA38c0195e312f2354F4aC186b165e538aE388Cc9",
+      "escrow": "0x6e2C9137A773d3E36Ef0F9aF07899D92E32170b1",
+      "compliance": "0x2b86C5E67287FC29AA7fa1f02a487EeA00227207",
+      "analytics": "0x66BA4df1eaAdcd4c32B1843BF283eD89A006a9d7"
+    }
+  }
+}
