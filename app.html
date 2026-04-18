@@ -2,17 +2,831 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="HexaPay App - private treasury, encrypted payments, and confidential invoices powered by FHE.">
-  <title>HexaPay App | Private Finance</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0e14">
+  <title>HexaPay - Private Finance</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/src/styles/main.css">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/app/styles.css">
 </head>
-<body class="ha-body">
-  <div class="ha-site-bg" aria-hidden="true"></div>
-  <main class="ha-root" data-hexapay-launch-app></main>
-  <script type="module" src="/src/main.js"></script>
+<body>
+  <div class="app-shell">
+    <header class="mobile-header">
+      <button class="menu-btn" aria-label="Open dashboard" data-view-target="dashboard">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <div class="header-logo">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <path d="M14 2L24 8V20L14 26L4 20V8L14 2Z" stroke="url(#headerGrad)" stroke-width="1.5" fill="none"/>
+          <circle cx="14" cy="14" r="4" fill="url(#headerGrad)"/>
+          <defs>
+            <linearGradient id="headerGrad" x1="4" y1="2" x2="24" y2="26">
+              <stop offset="0%" stop-color="#2dd4bf"/>
+              <stop offset="100%" stop-color="#14b8a6"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <button class="profile-btn" aria-label="Connect wallet" data-command="connect-wallet">
+        <div class="avatar" data-wallet-avatar>HX</div>
+      </button>
+    </header>
+
+    <nav class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+            <path d="M16 2L28 9V23L16 30L4 23V9L16 2Z" stroke="url(#sideGrad)" stroke-width="2" fill="none"/>
+            <circle cx="16" cy="16" r="5" fill="url(#sideGrad)"/>
+            <defs>
+              <linearGradient id="sideGrad" x1="4" y1="2" x2="28" y2="30">
+                <stop offset="0%" stop-color="#2dd4bf"/>
+                <stop offset="100%" stop-color="#14b8a6"/>
+              </linearGradient>
+            </defs>
+          </svg>
+          <span class="logo-text">HexaPay</span>
+        </div>
+      </div>
+
+      <div class="nav-items">
+        <a href="#dashboard" class="nav-item active">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="3" width="6" height="6" rx="1"/>
+            <rect x="11" y="3" width="6" height="6" rx="1"/>
+            <rect x="3" y="11" width="6" height="6" rx="1"/>
+            <rect x="11" y="11" width="6" height="6" rx="1"/>
+          </svg>
+          <span>Dashboard</span>
+        </a>
+        <a href="#send" class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M18 2L9 11M18 2L12 18L9 11M18 2L2 8L9 11"/>
+          </svg>
+          <span>Send</span>
+        </a>
+        <a href="#treasury" class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="2" y="4" width="16" height="12" rx="2"/>
+            <path d="M2 8H18"/>
+          </svg>
+          <span>Treasury</span>
+        </a>
+        <a href="#invoices" class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M5 2H15L18 5V18H5V2Z"/>
+            <path d="M8 8H12M8 11H12M8 14H10"/>
+          </svg>
+          <span>Invoices</span>
+        </a>
+        <a href="#policy" class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M10 2L17 5V10C17 14.2 14.3 17.4 10 18C5.7 17.4 3 14.2 3 10V5L10 2Z"/>
+            <path d="M7.5 10L9.2 11.7L12.8 8.3"/>
+          </svg>
+          <span>Policy</span>
+        </a>
+        <a href="#escrow" class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="4" width="14" height="12" rx="2"/>
+            <path d="M7 9H13M10 4V16"/>
+          </svg>
+          <span>Escrow</span>
+        </a>
+        <a href="#compliance" class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M6 3H14L17 6V17H3V3H6Z"/>
+            <path d="M6 3V7H10"/>
+            <path d="M7 11H13M7 14H11"/>
+          </svg>
+          <span>Compliance</span>
+        </a>
+        <a href="#analytics" class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M4 16V10"/>
+            <path d="M10 16V4"/>
+            <path d="M16 16V7"/>
+          </svg>
+          <span>Analytics</span>
+        </a>
+        <a href="#activity" class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="10" cy="10" r="8"/>
+            <path d="M10 6V10L13 13"/>
+          </svg>
+          <span>Activity</span>
+        </a>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="privacy-indicator">
+          <div class="privacy-icon encrypted"></div>
+          <div class="privacy-text">
+            <span class="privacy-label">Runtime</span>
+            <span class="privacy-status" data-privacy-status>Offline</span>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <main class="main-content">
+      <div class="view-container" id="dashboard-view">
+        <section class="app-toolbar" id="dashboard">
+          <div class="toolbar-copy">
+            <span class="toolbar-kicker">Live Contract App</span>
+            <h1>Private finance wired to HexaPay contracts.</h1>
+            <p class="toolbar-description" data-notice-summary>
+              Load the deployment manifest and connect a wallet to start revealing, sending, and settling inside this app.
+            </p>
+            <div class="toolbar-meta">
+              <span class="status-chip" data-chain-pill>Arb Sepolia</span>
+              <span class="status-chip" data-manifest-pill>Manifest pending</span>
+              <span class="status-chip" data-fhenix-pill>Offline</span>
+            </div>
+          </div>
+          <div class="toolbar-actions">
+            <button class="toolbar-btn primary" type="button" data-command="connect-wallet" data-wallet-cta>
+              Connect Wallet
+            </button>
+            <button class="toolbar-btn" type="button" data-command="switch-chain" data-switch-chain hidden>
+              Switch Network
+            </button>
+            <button class="toolbar-btn" type="button" data-command="disconnect-wallet" data-disconnect-wallet hidden>
+              Disconnect
+            </button>
+            <button class="toolbar-btn" type="button" data-command="sync-manifest">
+              Sync Manifest
+            </button>
+            <a class="toolbar-btn" href="./hexapay.html?entry=launch-app">Workspace</a>
+          </div>
+        </section>
+
+        <section class="view-panel" data-view-panel="dashboard">
+          <section class="operation-card" id="company">
+            <div class="operation-head">
+              <div>
+                <span class="operation-kicker">Identity</span>
+                <h2>Register operating company</h2>
+              </div>
+              <span class="operation-pill" data-company-pill>Setup</span>
+            </div>
+            <p class="operation-copy">
+              Anchor the company identity tied to the connected wallet before issuing invoices or operating through the private workflow rail.
+            </p>
+            <div class="form-grid">
+              <label class="field">
+                <span>Company name</span>
+                <input type="text" placeholder="HexaPay Ops" data-field="registerCompany.companyName">
+              </label>
+              <label class="field">
+                <span>ENS or alias</span>
+                <input type="text" placeholder="hexapay.eth" data-field="registerCompany.ensName">
+              </label>
+              <label class="field field-full">
+                <span>Company id</span>
+                <input type="text" placeholder="HEXAPAY-001" data-field="registerCompany.companyId">
+              </label>
+            </div>
+            <div class="operation-actions">
+              <button class="toolbar-btn primary" type="button" data-action="register-company" data-company-button>
+                Register Company
+              </button>
+            </div>
+            <div class="summary-list" data-company-summary>
+              <div class="summary-row">
+                <span>Status</span>
+                <strong>Not registered yet</strong>
+              </div>
+              <div class="summary-row">
+                <span>Signer</span>
+                <strong>Connect wallet</strong>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="view-panel" data-view-panel="send" hidden>
+          <section class="operation-card panel-shell" id="send">
+            <div class="operation-head">
+              <div>
+                <span class="operation-kicker">Treasury</span>
+                <h2>Encrypted payment rail</h2>
+              </div>
+              <span class="operation-pill" data-send-pill>Live</span>
+            </div>
+            <p class="operation-copy">
+              Send confidential payments from the new HexaPay app without exposing the raw amount in the public transaction payload.
+            </p>
+            <div class="form-grid">
+              <label class="field">
+                <span>Recipient</span>
+                <input type="text" placeholder="0xRecipient" data-field="sendPayment.recipient">
+              </label>
+              <label class="field">
+                <span>Amount</span>
+                <input type="text" placeholder="0.001" inputmode="decimal" data-field="sendPayment.amount">
+              </label>
+              <label class="field field-full">
+                <span>Reference</span>
+                <input type="text" placeholder="PAY-2026-001" data-field="sendPayment.referenceHash">
+              </label>
+            </div>
+            <div class="operation-actions">
+              <button class="toolbar-btn primary" type="button" data-action="send-payment" data-send-button>
+                Encrypt and Send
+              </button>
+            </div>
+            <div class="helper-line" data-send-helper>
+              Requires manifest sync, aligned wallet network, and CoFHE-ready runtime.
+            </div>
+          </section>
+        </section>
+
+        <section class="view-panel" data-view-panel="treasury" hidden>
+          <div class="balance-card" id="treasury">
+            <div class="balance-header">
+              <div class="balance-label">
+                <span data-balance-label>Private Treasury Balance</span>
+                <button class="privacy-toggle" data-command="toggle-balance" aria-label="Toggle privacy">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M2 8C2 8 4 4 8 4C12 4 14 8 14 8C14 8 12 12 8 12C4 12 2 8 2 8Z"/>
+                    <circle cx="8" cy="8" r="2"/>
+                  </svg>
+                </button>
+              </div>
+              <div class="balance-amount encrypted-state" data-balance-state>
+                <span class="amount-value" data-balance-value>Wallet not connected</span>
+                <span class="amount-encrypted" data-balance-encrypted>████████</span>
+              </div>
+              <div class="balance-change positive" data-balance-status>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                  <path d="M6 2L6 10M6 2L3 5M6 2L9 5"/>
+                </svg>
+                <span data-balance-caption>Manifest pending</span>
+              </div>
+              <div class="balance-actions">
+                <button class="mini-action" type="button" data-command="toggle-balance" data-balance-toggle>
+                  Reveal Locally
+                </button>
+                <button class="mini-action" type="button" data-command="refresh-app">
+                  Refresh Reads
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-header">
+            <h2>Contract Status</h2>
+            <button class="text-btn" type="button" data-command="refresh-app">
+              <span>Refresh Reads</span>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M13 3V7H9"/>
+                <path d="M3 13V9H7"/>
+                <path d="M4.6 6.2A4.5 4.5 0 0 1 12.7 4"/>
+                <path d="M11.4 9.8A4.5 4.5 0 0 1 3.3 12"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="accounts-grid">
+            <div class="account-card primary-account">
+              <div class="account-header">
+                <div class="account-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M4 20C5.8 16.8 8.5 15.2 12 15.2C15.5 15.2 18.2 16.8 20 20" stroke="currentColor" stroke-width="1.5"/>
+                  </svg>
+                </div>
+                <div class="account-menu">
+                  <button type="button" aria-label="Connect wallet" data-command="connect-wallet">...</button>
+                </div>
+              </div>
+              <div class="account-name">Wallet</div>
+              <div class="account-balance">
+                <span class="balance-value" data-wallet-status>Not connected</span>
+                <span class="balance-currency" data-wallet-chain>Offline</span>
+              </div>
+              <div class="account-meta" data-wallet-meta>No wallet session active.</div>
+              <div class="account-address" data-wallet-address>Connect wallet</div>
+            </div>
+
+            <div class="account-card">
+              <div class="account-header">
+                <div class="account-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M3 10H21" stroke="currentColor" stroke-width="1.5"/>
+                  </svg>
+                </div>
+                <div class="account-menu">
+                  <button type="button" aria-label="Sync manifest" data-command="sync-manifest">...</button>
+                </div>
+              </div>
+              <div class="account-name">Core Module</div>
+              <div class="account-balance">
+                <span class="balance-value" data-core-balance>Manifest pending</span>
+                <span class="balance-currency" data-core-symbol>USDC</span>
+              </div>
+              <div class="account-meta" data-core-meta>Backing balance and settlement token appear after live reads succeed.</div>
+              <div class="account-address" data-core-address>No core configured</div>
+            </div>
+
+            <div class="account-card">
+              <div class="account-header">
+                <div class="account-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M5 3H19L21 6V21H5V3Z" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M8 9H16M8 13H16M8 17H12" stroke="currentColor" stroke-width="1.5"/>
+                  </svg>
+                </div>
+                <div class="account-menu">
+                  <a class="account-link" href="./hexapay.html?entry=launch-app" aria-label="Open workspace">...</a>
+                </div>
+              </div>
+              <div class="account-name">Workflow Module</div>
+              <div class="account-balance">
+                <span class="balance-value" data-workflow-status>Waiting</span>
+                <span class="balance-currency" data-workflow-pill>Invoices</span>
+              </div>
+              <div class="account-meta" data-workflow-meta>Latest invoice focus and outstanding state will appear here.</div>
+              <div class="account-address" data-workflow-address>No workflow configured</div>
+            </div>
+
+            <div class="account-card">
+              <div class="account-header">
+                <div class="account-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <rect x="4" y="5" width="16" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M8 10H16M12 5V19" stroke="currentColor" stroke-width="1.5"/>
+                  </svg>
+                </div>
+                <div class="account-menu">
+                  <a class="account-link" href="#escrow" aria-label="Open escrow">...</a>
+                </div>
+              </div>
+              <div class="account-name">Escrow Module</div>
+              <div class="account-balance">
+                <span class="balance-value" data-escrow-status>Waiting</span>
+                <span class="balance-currency" data-escrow-pill>Escrow</span>
+              </div>
+              <div class="account-meta" data-escrow-meta>Latest escrow state and remaining balance will appear here.</div>
+              <div class="account-address" data-escrow-address>No escrow configured</div>
+            </div>
+
+            <div class="account-card">
+              <div class="account-header">
+                <div class="account-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M6 4H14L18 8V20H6V4Z" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M14 4V8H18" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M9 12H15M9 16H13" stroke="currentColor" stroke-width="1.5"/>
+                  </svg>
+                </div>
+                <div class="account-menu">
+                  <a class="account-link" href="#compliance" aria-label="Open compliance">...</a>
+                </div>
+              </div>
+              <div class="account-name">Compliance Module</div>
+              <div class="account-balance">
+                <span class="balance-value" data-compliance-status>Waiting</span>
+                <span class="balance-currency" data-compliance-pill>Audit</span>
+              </div>
+              <div class="account-meta" data-compliance-meta>Scoped rooms, auditors, and policy disclosure will appear here.</div>
+              <div class="account-address" data-compliance-address>No compliance configured</div>
+            </div>
+
+            <div class="account-card">
+              <div class="account-header">
+                <div class="account-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M6 18V11" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M12 18V6" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M18 18V9" stroke="currentColor" stroke-width="1.5"/>
+                  </svg>
+                </div>
+                <div class="account-menu">
+                  <a class="account-link" href="#analytics" aria-label="Open analytics">...</a>
+                </div>
+              </div>
+              <div class="account-name">Analytics Module</div>
+              <div class="account-balance">
+                <span class="balance-value" data-analytics-status>Waiting</span>
+                <span class="balance-currency" data-analytics-pill>Reporting</span>
+              </div>
+              <div class="account-meta" data-analytics-meta>Checkpoint and sealed exposure reads will appear here.</div>
+              <div class="account-address" data-analytics-address>No analytics configured</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view-panel" data-view-panel="invoices" hidden>
+          <section class="operation-card panel-shell" id="invoices">
+            <div class="operation-head">
+              <div>
+                <span class="operation-kicker">Invoices</span>
+                <h2>Create and inspect</h2>
+              </div>
+              <span class="operation-pill" data-invoice-pill>Workflow</span>
+            </div>
+            <p class="operation-copy">
+              Issue a confidential invoice, then load the workflow metadata and reveal outstanding only when the current session is permitted to decrypt it.
+            </p>
+            <div class="form-grid">
+              <label class="field">
+                <span>Company</span>
+                <input type="text" placeholder="0xCompany" data-field="createInvoice.company">
+              </label>
+              <label class="field">
+                <span>Payer</span>
+                <input type="text" placeholder="0xPayer" data-field="createInvoice.payer">
+              </label>
+              <label class="field">
+                <span>Amount</span>
+                <input type="text" placeholder="0.001" inputmode="decimal" data-field="createInvoice.amount">
+              </label>
+              <label class="field">
+                <span>Due at</span>
+                <input type="datetime-local" data-field="createInvoice.dueAt">
+              </label>
+              <label class="field field-full">
+                <span>Reference</span>
+                <input type="text" placeholder="invoice-2026-001" data-field="createInvoice.metadataHash">
+              </label>
+              <label class="field field-full">
+                <span>Invoice id</span>
+                <input type="text" placeholder="0xInvoiceId or text reference" data-field="monitorInvoice.invoiceId">
+              </label>
+            </div>
+            <div class="operation-actions">
+              <button class="toolbar-btn primary" type="button" data-action="create-invoice" data-create-invoice-button>
+                Create Invoice
+              </button>
+              <button class="toolbar-btn" type="button" data-action="read-invoice" data-read-invoice-button>
+                Load Invoice
+              </button>
+              <button class="toolbar-btn" type="button" data-action="read-outstanding" data-read-outstanding-button>
+                Reveal Outstanding
+              </button>
+            </div>
+            <div class="summary-list" data-invoice-summary>
+              <div class="summary-row">
+                <span>Status</span>
+                <strong>No invoice selected</strong>
+              </div>
+              <div class="summary-row">
+                <span>Outstanding</span>
+                <strong>Reveal to inspect</strong>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="view-panel" data-view-panel="policy" hidden>
+          <section class="operation-card panel-shell" id="policy">
+            <div class="operation-head">
+              <div>
+                <span class="operation-kicker">Policy</span>
+                <h2>Company approval rules</h2>
+              </div>
+              <span class="operation-pill">Workflow</span>
+            </div>
+            <p class="operation-copy">
+              Configure workflow approval rules per company, then read the active policy for invoice payment, payroll execution, or cancellation.
+            </p>
+            <div class="form-grid">
+              <label class="field">
+                <span>Company</span>
+                <input type="text" placeholder="0xCompany" data-field="policyRule.company">
+              </label>
+              <label class="field">
+                <span>Action type</span>
+                <select data-field="policyRule.actionType">
+                  <option value="0">Invoice payment</option>
+                  <option value="1">Payroll execution</option>
+                  <option value="2">Invoice cancellation</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Minimum approvals</span>
+                <input type="number" min="1" placeholder="2" data-field="policyRule.minApprovals">
+              </label>
+              <label class="field">
+                <span>Approval TTL (seconds)</span>
+                <input type="number" min="1" placeholder="86400" data-field="policyRule.approvalTtl">
+              </label>
+              <label class="field field-full">
+                <span>Rule status</span>
+                <select data-field="policyRule.active">
+                  <option value="true">Active</option>
+                  <option value="false">Inactive</option>
+                </select>
+              </label>
+            </div>
+            <div class="operation-actions">
+              <button class="toolbar-btn primary" type="button" data-action="set-policy-rule" data-set-policy-button>
+                Save Policy Rule
+              </button>
+              <button class="toolbar-btn" type="button" data-action="read-policy-rule" data-read-policy-button>
+                Read Policy Rule
+              </button>
+            </div>
+            <div class="summary-list" data-policy-summary>
+              <div class="summary-row">
+                <span>Status</span>
+                <strong>No company selected</strong>
+              </div>
+              <div class="summary-row">
+                <span>Action</span>
+                <strong>Choose a workflow action</strong>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="view-panel" data-view-panel="escrow" hidden>
+          <section class="operation-card panel-shell" id="escrow">
+            <div class="operation-head">
+              <div>
+                <span class="operation-kicker">Escrow</span>
+                <h2>Create and inspect</h2>
+              </div>
+              <span class="operation-pill">Commerce</span>
+            </div>
+            <p class="operation-copy">
+              Open a private buyer-seller escrow, inspect its public metadata, and reveal the sealed remaining amount locally when you have access.
+            </p>
+            <div class="form-grid">
+              <label class="field">
+                <span>Seller</span>
+                <input type="text" placeholder="0xSeller" data-field="createEscrow.seller">
+              </label>
+              <label class="field">
+                <span>Arbiter</span>
+                <input type="text" placeholder="0xArbiter" data-field="createEscrow.arbiter">
+              </label>
+              <label class="field">
+                <span>Total amount</span>
+                <input type="text" placeholder="0.001" inputmode="decimal" data-field="createEscrow.amount">
+              </label>
+              <label class="field">
+                <span>Expires at</span>
+                <input type="datetime-local" data-field="createEscrow.expiresAt">
+              </label>
+              <label class="field field-full">
+                <span>Metadata reference</span>
+                <input type="text" placeholder="escrow-2026-001" data-field="createEscrow.metadataHash">
+              </label>
+              <label class="field field-full">
+                <span>Escrow id</span>
+                <input type="text" placeholder="0xEscrowId or text reference" data-field="monitorEscrow.escrowId">
+              </label>
+            </div>
+            <div class="operation-actions">
+              <button class="toolbar-btn primary" type="button" data-action="create-escrow" data-create-escrow-button>
+                Create Escrow
+              </button>
+              <button class="toolbar-btn" type="button" data-action="read-escrow" data-read-escrow-button>
+                Load Escrow
+              </button>
+              <button class="toolbar-btn" type="button" data-action="read-escrow-remaining" data-read-escrow-remaining-button>
+                Reveal Remaining
+              </button>
+            </div>
+            <div class="summary-list" data-escrow-summary>
+              <div class="summary-row">
+                <span>Status</span>
+                <strong>No escrow selected</strong>
+              </div>
+              <div class="summary-row">
+                <span>Remaining</span>
+                <strong>Reveal to inspect</strong>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="view-panel" data-view-panel="compliance" hidden>
+          <section class="operation-card panel-shell" id="compliance">
+            <div class="operation-head">
+              <div>
+                <span class="operation-kicker">Compliance</span>
+                <h2>Scoped audit room</h2>
+              </div>
+              <span class="operation-pill">Audit</span>
+            </div>
+            <p class="operation-copy">
+              Create a compliance room for a subject and auditor, then inspect its scope list, expiry, and policy hash from one workspace.
+            </p>
+            <div class="form-grid">
+              <label class="field">
+                <span>Subject</span>
+                <input type="text" placeholder="0xSubject" data-field="createCompliance.subject">
+              </label>
+              <label class="field">
+                <span>Auditor</span>
+                <input type="text" placeholder="0xAuditor" data-field="createCompliance.auditor">
+              </label>
+              <label class="field">
+                <span>Scopes</span>
+                <input type="text" placeholder="2,5" data-field="createCompliance.scopes">
+              </label>
+              <label class="field">
+                <span>Duration (seconds)</span>
+                <input type="number" min="1" placeholder="604800" data-field="createCompliance.duration">
+              </label>
+              <label class="field field-full">
+                <span>Policy reference</span>
+                <input type="text" placeholder="audit-policy-v1" data-field="createCompliance.policyHash">
+              </label>
+              <label class="field field-full">
+                <span>Room id</span>
+                <input type="text" placeholder="0xRoomId or text reference" data-field="monitorCompliance.roomId">
+              </label>
+            </div>
+            <div class="operation-actions">
+              <button class="toolbar-btn primary" type="button" data-action="create-compliance-room" data-create-compliance-button>
+                Create Room
+              </button>
+              <button class="toolbar-btn" type="button" data-action="read-compliance-room" data-read-compliance-button>
+                Load Room
+              </button>
+            </div>
+            <div class="summary-list" data-compliance-summary>
+              <div class="summary-row">
+                <span>Status</span>
+                <strong>No room selected</strong>
+              </div>
+              <div class="summary-row">
+                <span>Scopes</span>
+                <strong>Read a room to inspect</strong>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="view-panel" data-view-panel="analytics" hidden>
+          <section class="operation-card panel-shell" id="analytics">
+            <div class="operation-head">
+              <div>
+                <span class="operation-kicker">Analytics</span>
+                <h2>Checkpoint and exposure</h2>
+              </div>
+              <span class="operation-pill">Reporting</span>
+            </div>
+            <p class="operation-copy">
+              Anchor finance snapshots on-chain, then read checkpoint metadata and sealed invoice or escrow exposure for a company with local decrypts.
+            </p>
+            <div class="form-grid">
+              <label class="field">
+                <span>Company</span>
+                <input type="text" placeholder="0xCompany" data-field="analyticsCheckpoint.company">
+              </label>
+              <label class="field">
+                <span>Snapshot reference</span>
+                <input type="text" placeholder="monthly-close-2026-03" data-field="analyticsCheckpoint.snapshotHash">
+              </label>
+              <label class="field">
+                <span>Checkpoint id</span>
+                <input type="text" placeholder="0xCheckpointId or text reference" data-field="monitorAnalytics.checkpointId">
+              </label>
+              <label class="field">
+                <span>Exposure company</span>
+                <input type="text" placeholder="0xCompany" data-field="monitorAnalytics.company">
+              </label>
+            </div>
+            <div class="operation-actions">
+              <button class="toolbar-btn primary" type="button" data-action="create-analytics-checkpoint" data-create-checkpoint-button>
+                Create Checkpoint
+              </button>
+              <button class="toolbar-btn" type="button" data-action="read-analytics-checkpoint" data-read-checkpoint-button>
+                Load Checkpoint
+              </button>
+              <button class="toolbar-btn" type="button" data-action="read-invoice-exposure" data-read-invoice-exposure-button>
+                Reveal Invoice Exposure
+              </button>
+              <button class="toolbar-btn" type="button" data-action="read-escrow-exposure" data-read-escrow-exposure-button>
+                Reveal Escrow Exposure
+              </button>
+            </div>
+            <div class="summary-list" data-analytics-summary>
+              <div class="summary-row">
+                <span>Status</span>
+                <strong>No checkpoint selected</strong>
+              </div>
+              <div class="summary-row">
+                <span>Exposure</span>
+                <strong>Read a company metric</strong>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="view-panel" data-view-panel="activity" hidden>
+          <div class="section-header">
+            <h2>Recent Activity</h2>
+            <button class="text-btn" type="button" data-command="clear-activity">
+              <span>Clear Log</span>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 4H13"/>
+                <path d="M6 4V2H10V4"/>
+                <path d="M5 6V12"/>
+                <path d="M8 6V12"/>
+                <path d="M11 6V12"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="activity-list" id="activity" data-activity-list>
+            <div class="activity-item activity-item-empty">
+              <div class="activity-icon received">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <circle cx="8" cy="8" r="6"/>
+                </svg>
+              </div>
+              <div class="activity-details">
+                <div class="activity-title">No live confirmations yet</div>
+                <div class="activity-meta">
+                  <span class="activity-time">Sync manifest and send the first action from this app.</span>
+                </div>
+              </div>
+              <div class="activity-amount neutral">
+                <span class="amount">Standby</span>
+                <span class="currency">LOG</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <nav class="bottom-nav">
+      <a href="#dashboard" class="bottom-nav-item active">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7" rx="1"/>
+          <rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/>
+          <rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
+        <span>Home</span>
+      </a>
+      <a href="#send" class="bottom-nav-item">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"/>
+        </svg>
+        <span>Send</span>
+      </a>
+      <a href="#invoices" class="bottom-nav-item">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M5 2H15L18 5V18H5V2Z"/>
+          <path d="M8 8H12M8 11H12M8 14H10"/>
+        </svg>
+        <span>Invoices</span>
+      </a>
+      <a href="#policy" class="bottom-nav-item">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 3L20 7V12C20 16.6 16.9 20.3 12 21C7.1 20.3 4 16.6 4 12V7L12 3Z"/>
+          <path d="M9.5 12L11.3 13.8L14.8 10.3"/>
+        </svg>
+        <span>Policy</span>
+      </a>
+      <a href="#escrow" class="bottom-nav-item">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="4" y="5" width="16" height="14" rx="2"/>
+          <path d="M8 12H16M12 5V19"/>
+        </svg>
+        <span>Escrow</span>
+      </a>
+      <a href="#compliance" class="bottom-nav-item">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M7 4H15L19 8V20H7V4Z"/>
+          <path d="M15 4V8H19"/>
+          <path d="M10 12H16M10 16H14"/>
+        </svg>
+        <span>Audit</span>
+      </a>
+      <a href="#analytics" class="bottom-nav-item">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M7 20V12"/>
+          <path d="M12 20V5"/>
+          <path d="M17 20V9"/>
+        </svg>
+        <span>Analytics</span>
+      </a>
+      <a href="#activity" class="bottom-nav-item">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M12 6V12L16 16"/>
+        </svg>
+        <span>Activity</span>
+      </a>
+    </nav>
+  </div>
+
+  <script type="module" src="/app/main.js"></script>
 </body>
 </html>

@@ -142,11 +142,23 @@ contract HexaPayAnalyticsModule {
         uint64 to,
         bytes32 publicKey
     ) external view returns (uint256) {
-        from;
-        to;
         publicKey;
         if (!_canViewAnalytics(company, msg.sender)) revert NoAnalyticsAccess();
-        return euint128.unwrap(companySpendCumulative[company]);
+        if (to != 0 && from > to) revert InvalidTimeRange();
+
+        euint128 upper = to == 0 ? companySpendCumulative[company] : _cumulativeSpendAt(company, to);
+        if (from == 0) {
+            return euint128.unwrap(upper);
+        }
+
+        euint128 lower = _cumulativeSpendBefore(company, from);
+        uint256 upperValue = euint128.unwrap(upper);
+        uint256 lowerValue = euint128.unwrap(lower);
+        if (upperValue <= lowerValue) {
+            return 0;
+        }
+
+        return upperValue - lowerValue;
     }
 
     function getSealedPayrollRunTotal(bytes32 scheduleId, bytes32 publicKey)

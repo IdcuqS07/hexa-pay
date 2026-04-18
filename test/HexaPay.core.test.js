@@ -7,7 +7,9 @@ const {
   hashText,
   randomPublicKey,
   sendAndParseEvent,
+  TEST_SETTLEMENT_DECIMALS,
   unseal,
+  unwrapAmount,
   wrapAmount
 } = require("./helpers/hexapay");
 
@@ -28,17 +30,28 @@ describe("HexaPay core rail", function () {
     expect(await token.balanceOf(await hexaPay.vault())).to.equal(100n);
   });
 
-  it("unwraps encrypted balances back into the settlement token", async function () {
+  it("targets a 6-decimal USDC-style settlement token in tests", async function () {
+    const { token } = await createFixture();
+
+    expect(await token.symbol()).to.equal("USDC");
+    expect(await token.decimals()).to.equal(TEST_SETTLEMENT_DECIMALS);
+  });
+
+  it("unwraps encrypted balances back into the settlement token through the async completion flow", async function () {
     const { hexaPay, owner, token } = await createFixture();
 
     await wrapAmount(token, hexaPay, owner, owner, 100n);
-    await hexaPay.connect(owner).unwrap(await encrypt128(40n));
+    const withdrawalId = await unwrapAmount(hexaPay, owner, 40n);
 
     const ownerPermission = await createPermission(hexaPay, owner);
+    const withdrawal = await hexaPay.getWithdrawal(withdrawalId);
 
     expect(await hexaPay.connect(owner).getBalance(ownerPermission)).to.equal(60n);
     expect(await hexaPay.getBackingBalance()).to.equal(60n);
     expect(await token.balanceOf(await hexaPay.vault())).to.equal(60n);
+    expect(withdrawal.requester).to.equal(owner.address);
+    expect(withdrawal.ready).to.equal(true);
+    expect(withdrawal.completed).to.equal(true);
   });
 
   it("creates a private payment, charges the platform fee, and records analytics spend", async function () {

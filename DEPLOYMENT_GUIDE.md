@@ -20,9 +20,11 @@ You need:
 
 - a wallet private key for deployment
 - Arbitrum Sepolia ETH for gas
-- a settlement token address for HexaPay core
+- a settlement token address for HexaPay core if you want to override the default
 
-Outside `localhost`, `SETTLEMENT_TOKEN_ADDRESS` is required because the deploy script only auto-deploys `MockERC20` on local Hardhat.
+On `arb-sepolia`, the deploy script now defaults to Circle USDC testnet:
+
+- `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d`
 
 If you do not already have a test ERC-20 on Arbitrum Sepolia, deploy one with:
 
@@ -42,7 +44,7 @@ Edit `.env`:
 ARB_SEPOLIA_RPC=https://sepolia-rollup.arbitrum.io/rpc
 PRIVATE_KEY=0xyour_private_key_here
 ARBISCAN_API_KEY=
-SETTLEMENT_TOKEN_ADDRESS=0xyour_test_erc20_here
+SETTLEMENT_TOKEN_ADDRESS=0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d
 ```
 
 Notes:
@@ -50,6 +52,7 @@ Notes:
 - `PRIVATE_KEY` should include the `0x` prefix.
 - `ARBISCAN_API_KEY` is optional and only needed for verification.
 - `SETTLEMENT_TOKEN_ADDRESS` should point to the ERC-20 you want HexaPay to use as its settlement rail on Arbitrum Sepolia.
+- Leave the default value in place if you want Circle USDC testnet.
 
 ## 2. Install And Compile
 
@@ -128,9 +131,9 @@ You can also import `deployment.json` from the HexaPay workspace UI.
 
 Fund the deployer wallet with more Arbitrum Sepolia ETH.
 
-### SETTLEMENT_TOKEN_ADDRESS is required on arb-sepolia
+### Override SETTLEMENT_TOKEN_ADDRESS on arb-sepolia
 
-Point the env var to a test ERC-20 on Arbitrum Sepolia, or deploy locally if you want the script to auto-create a mock token.
+The default deploy flow already points to Circle USDC testnet. Override the env var only if you intentionally want a different settlement token.
 
 ### invalid account or private key
 

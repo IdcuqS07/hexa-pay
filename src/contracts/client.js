@@ -73,20 +73,6 @@ const INJECTED_WALLET_CATALOG = [
   },
 ];
 
-function getCofheInitializationOptions(chainId) {
-  const normalizedChainId = String(chainId || "");
-
-  if (normalizedChainId === "421614") {
-    return { environment: "TESTNET" };
-  }
-
-  if (normalizedChainId === "31337") {
-    return { environment: "LOCAL" };
-  }
-
-  throw new Error(`CoFHE is not configured for chain ${normalizedChainId || "unknown"}.`);
-}
-
 function assertTfheBrowserSupport() {
   if (typeof window === "undefined") {
     return;
@@ -113,20 +99,14 @@ function getTfheBrowserDiagnostics() {
   return `crossOriginIsolated=${String(window.crossOriginIsolated)}, SharedArrayBuffer=${sharedArrayBufferState}`;
 }
 
-function unwrapFhenixResult(result, fallbackMessage = "CoFHE request failed.") {
-  if (result && typeof result === "object" && "success" in result) {
-    if (result.success) {
-      return result.data;
-    }
+function getSupportedCofheChain(chainId, getChainById) {
+  const supportedChain = getChainById(Number(chainId));
 
-    if (result.error instanceof Error) {
-      throw result.error;
-    }
-
-    throw new Error(result.error?.message || fallbackMessage);
+  if (supportedChain) {
+    return supportedChain;
   }
 
-  return result;
+  throw new Error(`CoFHE is not configured for chain ${String(chainId || "unknown")}.`);
 }
 
 function coerceHandle(value) {
@@ -143,6 +123,34 @@ function coerceHandle(value) {
   }
 
   throw new Error("Encrypted handle is invalid.");
+}
+
+function normalizeBytes32Value(value, label = "Bytes32 value") {
+  if (!value) {
+    return ZERO_BYTES32;
+  }
+
+  if (value instanceof Uint8Array) {
+    if (value.byteLength !== 32) {
+      throw new Error(`${label} must be 32 bytes.`);
+    }
+
+    return `0x${Array.from(value, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+  }
+
+  const rawValue = typeof value === "string" ? value.trim() : String(value).trim();
+
+  if (!rawValue) {
+    return ZERO_BYTES32;
+  }
+
+  const normalized = rawValue.startsWith("0x") || rawValue.startsWith("0X") ? `0x${rawValue.slice(2)}` : `0x${rawValue}`;
+
+  if (!/^0x[0-9a-fA-F]{64}$/.test(normalized)) {
+    throw new Error(`${label} must be a 32-byte hex string.`);
+  }
+
+  return normalized;
 }
 
 function serializeErrorMessage(error) {
@@ -234,7 +242,17 @@ function decodeContractError(contractKey, error) {
 
 async function loadFhenixModule() {
   if (!fhenixModulePromise) {
-    fhenixModulePromise = import("cofhejs/web");
+    fhenixModulePromise = Promise.all([
+      import("@cofhe/sdk"),
+      import("@cofhe/sdk/web"),
+      import("@cofhe/sdk/adapters"),
+      import("@cofhe/sdk/chains"),
+    ]).then(([core, web, adapters, chains]) => ({
+      ...core,
+      ...web,
+      ...adapters,
+      ...chains,
+    }));
   }
 
   return fhenixModulePromise;
@@ -678,31 +696,25 @@ export async function getFhenixState(runtime) {
   }
 
   try {
-    const { cofhejs } = await loadFhenixModule();
-    const cofheInit = getCofheInitializationOptions(runtime.chainId);
+    const { createCofheConfig, createCofheClient, Ethers6Adapter, getChainById } =
+      await loadFhenixModule();
+    const supportedChain = getSupportedCofheChain(runtime.chainId, getChainById);
     assertTfheBrowserSupport();
+    const config = createCofheConfig({
+      supportedChains: [supportedChain],
+    });
+    const client = createCofheClient(config);
+    const { publicClient, walletClient } = await Ethers6Adapter(runtime.provider, runtime.signer);
 
-    await unwrapFhenixResult(
-      await cofhejs.initializeWithEthers({
-        ethersProvider: runtime.provider,
-        ethersSigner: runtime.signer,
-        generatePermit: true,
-        ...cofheInit,
-      }),
-      "Failed to initialize CoFHE.",
-    );
+    await client.connect(publicClient, walletClient);
 
-    let permit;
-    try {
-      permit = unwrapFhenixResult(cofhejs.getPermit());
-    } catch (error) {
-      permit = unwrapFhenixResult(await cofhejs.createPermit());
-    }
+    const permitHash =
+      client.permits.getActivePermitHash(Number(runtime.chainId), runtime.account) || "";
 
     return {
       mode: "ready",
-      client: cofhejs,
-      permitHash: permit.getHash(),
+      client,
+      permitHash,
       error: "",
     };
   } catch (error) {
@@ -728,7 +740,15 @@ export function hasFhenixPermit(fhenixState, contractAddress, account) {
   }
 
   try {
-    return Boolean(fhenixState.permitHash);
+    const chainId = Number(fhenixState.client.connection.chainId || 0);
+    const connectedAccount = fhenixState.client.connection.account || "";
+
+    return Boolean(
+      fhenixState.permitHash ||
+        (chainId && connectedAccount
+          ? fhenixState.client.permits.getActivePermitHash(chainId, connectedAccount)
+          : ""),
+    );
   } catch (error) {
     return false;
   }
@@ -739,22 +759,36 @@ export async function ensurePermit(fhenixState) {
     throw new Error("CoFHE client is not initialized.");
   }
 
-  let permit;
+  const chainId = Number(fhenixState.client.connection.chainId || 0);
+  const account = normalizeAddress(fhenixState.client.connection.account || "");
 
-  try {
-    permit = unwrapFhenixResult(fhenixState.client.getPermit(fhenixState.permitHash || undefined));
-  } catch (error) {
-    permit = unwrapFhenixResult(await fhenixState.client.createPermit());
+  if (!chainId || !account) {
+    throw new Error("Reconnect the wallet before requesting a CoFHE permit.");
   }
 
-  const permitHash = permit.getHash();
-  const permission = unwrapFhenixResult(fhenixState.client.getPermission(permitHash));
+  let permit = fhenixState.client.permits.getActivePermit(chainId, account);
+
+  if (!permit) {
+    permit = await fhenixState.client.permits.getOrCreateSelfPermit(chainId, account, {
+      issuer: account,
+      name: "HexaPay self permit",
+    });
+  }
+
+  const permitHash = fhenixState.client.permits.getActivePermitHash(chainId, account) || permit?.hash || "";
+  const activePermit =
+    (permitHash ? fhenixState.client.permits.getPermit(permitHash, chainId, account) : null) || permit;
+
+  if (!activePermit) {
+    throw new Error("Failed to load a CoFHE permit for this account.");
+  }
+
+  fhenixState.permitHash = permitHash || activePermit.hash || "";
 
   return {
-    permit,
-    permission,
-    publicKey: permission.sealingKey || ZERO_BYTES32,
-    permitHash,
+    permit: activePermit,
+    publicKey: normalizeBytes32Value(activePermit.sealingPair?.publicKey, "CoFHE permit public key"),
+    permitHash: fhenixState.permitHash,
   };
 }
 
@@ -771,6 +805,24 @@ export async function readWithPermit(runtime, fhenixState, contractKey, address,
   );
 }
 
+function buildEncryptedReadArgs(contractKey, functionName, args, publicKey) {
+  try {
+    const fragment = getContractInterface(contractKey).getFunction(functionName);
+
+    if (fragment.inputs.length === args.length) {
+      return args;
+    }
+
+    if (fragment.inputs.length === args.length + 1) {
+      return [...args, publicKey];
+    }
+  } catch (error) {
+    error;
+  }
+
+  return [...args, publicKey];
+}
+
 export async function readSealedValue(runtime, fhenixState, contractKey, address, functionName, args = []) {
   if (!runtime?.provider) {
     throw new Error("Wallet provider is not available.");
@@ -781,7 +833,7 @@ export async function readSealedValue(runtime, fhenixState, contractKey, address
   }
 
   if (!runtime?.account) {
-    throw new Error("Connect a wallet to unseal encrypted values.");
+    throw new Error("Connect a wallet to decrypt encrypted values.");
   }
 
   if (!fhenixState?.client) {
@@ -791,17 +843,28 @@ export async function readSealedValue(runtime, fhenixState, contractKey, address
   const { FheTypes } = await loadFhenixModule();
   const permitState = await ensurePermit(fhenixState);
   const contract = getContract(contractKey, address, runtime.signer);
-  const sealedValue = await contract[functionName](...args, permitState.publicKey);
-  const ciphertextHandle = coerceHandle(sealedValue);
-  const clearValue = unwrapFhenixResult(
-    await fhenixState.client.unseal(
-      ciphertextHandle,
-      FheTypes.Uint128,
-      runtime.account,
-      permitState.permitHash,
-    ),
-    "Failed to unseal encrypted value.",
+  const sealedValue = await contract[functionName](
+    ...buildEncryptedReadArgs(contractKey, functionName, args, permitState.publicKey),
   );
+  const ciphertextHandle = coerceHandle(sealedValue);
+
+  // The fresh Arb Sepolia suite uses zero handles for empty/default confidential values.
+  // CoFHE's seal-output endpoint rejects `ctHash=0`, so surface it as a plain zero locally.
+  if (ciphertextHandle === 0n) {
+    return {
+      sealedValue: ciphertextHandle.toString(),
+      clearValue: 0n,
+      publicKey: permitState.publicKey,
+      permitHash: permitState.permitHash,
+    };
+  }
+
+  const clearValue = await fhenixState.client
+    .decryptForView(ciphertextHandle, FheTypes.Uint128)
+    .setAccount(runtime.account)
+    .setChainId(Number(runtime.chainId))
+    .withPermit(permitState.permitHash)
+    .execute();
 
   return {
     sealedValue: ciphertextHandle.toString(),
@@ -816,10 +879,19 @@ export async function buildEncryptedAmount(fhenixState, value, { allowPlaceholde
 
   if (fhenixState?.client) {
     const { Encryptable, FheTypes } = await loadFhenixModule();
-    const [encryptedValue] = unwrapFhenixResult(
-      await fhenixState.client.encrypt([Encryptable.uint128(amount)]),
-      "Failed to encrypt amount with CoFHE.",
-    );
+    const chainId = Number(fhenixState.client.connection.chainId || 0);
+    const account = normalizeAddress(fhenixState.client.connection.account || "");
+    let encryptBuilder = fhenixState.client.encryptInputs([Encryptable.uint128(amount)]);
+
+    if (account) {
+      encryptBuilder = encryptBuilder.setAccount(account);
+    }
+
+    if (chainId) {
+      encryptBuilder = encryptBuilder.setChainId(chainId);
+    }
+
+    const [encryptedValue] = await encryptBuilder.execute();
 
     return {
       payload: {
@@ -994,6 +1066,7 @@ function extractReceiptIdentifiers(events = []) {
     "invoiceId",
     "paymentId",
     "escrowId",
+    "withdrawalId",
     "roomId",
     "actionId",
     "scheduleId",
@@ -1095,7 +1168,7 @@ export function explainFhenixMode(fhenixState) {
     return {
       tone: "good",
       label: "CoFHE ready",
-      detail: "Encrypted uint128 inputs and local handle unsealing are available in-browser.",
+      detail: "Encrypted uint128 inputs and permit-based local decrypts are available in-browser.",
     };
   }
 

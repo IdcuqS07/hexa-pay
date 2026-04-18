@@ -2,6 +2,7 @@
 pragma solidity ^0.8.25;
 
 import "@fhenixprotocol/cofhe-contracts/FHE.sol";
+import "./HexaPayWorkflowWriteDelegate.sol";
 import "./interfaces/IHexaPay.sol";
 import "./interfaces/IHexaPayAnalytics.sol";
 import "./interfaces/IHexaPayCore.sol";
@@ -119,6 +120,7 @@ contract HexaPayWorkflowModule {
     }
 
     IHexaPayCore public immutable core;
+    address private immutable writeDelegate;
 
     mapping(bytes32 => Invoice) private invoices;
     mapping(bytes32 => euint128) private invoiceTotals;
@@ -186,26 +188,15 @@ contract HexaPayWorkflowModule {
     event PayrollExecuted(bytes32 indexed scheduleId, uint256 timestamp, uint256 paymentsCreated);
     event PayrollScheduleCancelled(bytes32 indexed scheduleId);
 
-    modifier onlyCompanyOwner(address company) {
-        if (msg.sender != company) revert NotCompanyOwner();
-        _;
-    }
-
     modifier onlyCompanyOperator(address company) {
         if (!core.isCompanyOperator(company, msg.sender)) revert NotCompanyOperator();
         _;
     }
 
-    modifier nonReentrant() {
-        if (entered) revert ReentrancyBlocked();
-        entered = true;
-        _;
-        entered = false;
-    }
-
     constructor(address core_) {
         if (core_ == address(0)) revert InvalidCore();
         core = IHexaPayCore(core_);
+        writeDelegate = address(new HexaPayWorkflowWriteDelegate(core_));
     }
 
     function createInvoice(
@@ -302,32 +293,17 @@ contract HexaPayWorkflowModule {
     }
 
     function cancelInvoice(bytes32 invoiceId) external {
-        Invoice storage invoice = invoices[invoiceId];
-
-        if (!invoice.exists) revert UnknownInvoice();
-        if (!_canManageInvoice(invoiceId, msg.sender)) revert NotInvoiceOperator();
-        if (_isPolicyActive(invoice.company, PolicyActionType.InvoiceCancellation)) {
-            revert PolicyApprovalRequired();
-        }
-
-        _cancelInvoiceRecord(invoiceId);
+        invoiceId;
+        _delegateWriteCall();
     }
 
     function payInvoice(bytes32 invoiceId, InEuint128 calldata encryptedAmount)
         external
-        nonReentrant
         returns (bytes32 paymentId)
     {
-        Invoice storage invoice = invoices[invoiceId];
-
-        if (!invoice.exists) revert UnknownInvoice();
-        if (!_canActForInvoicePayer(invoice.payer, msg.sender)) revert NotInvoicePayer();
-        if (_isPolicyActive(invoice.payer, PolicyActionType.InvoicePayment)) {
-            revert PolicyApprovalRequired();
-        }
-
-        euint128 amount = FHE.asEuint128(encryptedAmount);
-        paymentId = _settleInvoicePayment(invoiceId, amount);
+        invoiceId;
+        encryptedAmount;
+        return abi.decode(_delegateWriteCall(), (bytes32));
     }
 
     function getInvoice(bytes32 invoiceId)
@@ -452,21 +428,13 @@ contract HexaPayWorkflowModule {
         uint8 minApprovals,
         uint64 approvalTtl,
         bool active
-    ) external onlyCompanyOwner(company) {
-        if (!core.isCompanyRegistered(company)) revert CompanyNotRegistered();
-
-        if (active) {
-            if (minApprovals == 0) revert InvalidApprovals();
-            if (approvalTtl == 0) revert InvalidApprovals();
-        }
-
-        policyRules[company][actionType] = PolicyRule({
-            minApprovals: minApprovals,
-            approvalTtl: approvalTtl,
-            active: active
-        });
-
-        emit PolicyRuleUpdated(company, actionType, minApprovals, approvalTtl, active);
+    ) external {
+        company;
+        actionType;
+        minApprovals;
+        approvalTtl;
+        active;
+        _delegateWriteCall();
     }
 
     function getPolicyRule(address company, PolicyActionType actionType)
@@ -478,72 +446,226 @@ contract HexaPayWorkflowModule {
         return (rule.minApprovals, rule.approvalTtl, rule.active);
     }
 
-    function _settleInvoicePayment(bytes32 invoiceId, euint128 amount)
-        internal
-        returns (bytes32 paymentId)
-    {
-        Invoice storage invoice = invoices[invoiceId];
-
-        if (!invoice.exists) revert UnknownInvoice();
-        if (
-            invoice.status != InvoiceStatus.Approved &&
-            invoice.status != InvoiceStatus.PartiallyPaid
-        ) revert InvoiceNotPayable();
-
-        euint128 payerBalance = euint128.wrap(core.getAccountBalanceHandle(invoice.payer));
-        euint128 safeAmount = FHE.min(_sanitizePositive(amount), invoiceOutstanding[invoiceId]);
-        safeAmount = FHE.min(safeAmount, payerBalance);
-
-        bytes32 referenceHash = keccak256(
-            abi.encodePacked(invoiceId, invoice.paymentCount + 1, invoice.metadataHash)
-        );
-
-        _allowCoreHandle(safeAmount);
-        paymentId = core.createManagedPayment(
-            invoice.payer,
-            invoice.company,
-            safeAmount,
-            referenceHash,
-            IHexaPay.PaymentKind.Invoice
-        );
-
-        invoiceOutstanding[invoiceId] = FHE.sub(invoiceOutstanding[invoiceId], safeAmount);
-        invoice.paymentCount += 1;
-        invoicePayments[invoiceId].push(paymentId);
-        _refreshInvoiceHandles(invoiceId);
-        _allowAnalyticsHandle(safeAmount);
-        IHexaPayAnalytics(core.analyticsModule()).decreaseInvoiceExposure(invoice.company, safeAmount);
-        invoice.status = InvoiceStatus.PartiallyPaid;
-
-        emit InvoicePaymentApplied(invoiceId, paymentId, invoice.paymentCount);
+    function setSignerActionPermission(
+        address signer,
+        PolicyActionType actionType,
+        bool approved
+    ) external {
+        signer;
+        actionType;
+        approved;
+        _delegateWriteCall();
     }
 
-    function _cancelInvoiceRecord(bytes32 invoiceId) internal {
-        Invoice storage invoice = invoices[invoiceId];
+    function isSignerAuthorizedForAction(
+        address company,
+        address signer,
+        PolicyActionType actionType
+    ) public view returns (bool) {
+        if (company == address(0) || signer == address(0) || signer == company) {
+            return false;
+        }
 
-        if (!invoice.exists) revert UnknownInvoice();
-        if (invoice.paymentCount != 0) revert InvoiceAlreadyFunded();
-        if (!_isInvoiceEditable(invoice.status)) revert InvoiceNotCancellable();
+        return
+            signerActionPermissions[company][signer][actionType] &&
+            core.isCompanyOperator(company, signer);
+    }
 
-        _allowAnalyticsHandle(invoiceOutstanding[invoiceId]);
-        IHexaPayAnalytics(core.analyticsModule()).decreaseInvoiceExposure(
-            invoice.company,
-            invoiceOutstanding[invoiceId]
+    function proposeInvoicePayment(
+        bytes32 invoiceId,
+        InEuint128 calldata encryptedAmount,
+        bytes32 metadataHash
+    ) external returns (bytes32 actionId) {
+        invoiceId;
+        encryptedAmount;
+        metadataHash;
+        return abi.decode(_delegateWriteCall(), (bytes32));
+    }
+
+    function proposePayrollExecution(bytes32 scheduleId, bytes32 metadataHash)
+        external
+        returns (bytes32 actionId)
+    {
+        scheduleId;
+        metadataHash;
+        return abi.decode(_delegateWriteCall(), (bytes32));
+    }
+
+    function proposeInvoiceCancellation(bytes32 invoiceId, bytes32 metadataHash)
+        external
+        returns (bytes32 actionId)
+    {
+        invoiceId;
+        metadataHash;
+        return abi.decode(_delegateWriteCall(), (bytes32));
+    }
+
+    function approvePendingAction(bytes32 actionId) external {
+        actionId;
+        _delegateWriteCall();
+    }
+
+    function revokePendingActionApproval(bytes32 actionId) external {
+        actionId;
+        _delegateWriteCall();
+    }
+
+    function executePendingAction(bytes32 actionId)
+        external
+        returns (bytes32 resultId)
+    {
+        actionId;
+        return abi.decode(_delegateWriteCall(), (bytes32));
+    }
+
+    function getPendingAction(bytes32 actionId)
+        external
+        view
+        returns (
+            address company,
+            address proposer,
+            bytes32 resourceId,
+            bytes32 metadataHash,
+            PolicyActionType actionType,
+            uint64 createdAt,
+            uint64 expiresAt,
+            uint32 approvalCount,
+            bool executed
+        )
+    {
+        PendingAction storage action = pendingActions[actionId];
+        if (!action.exists) revert UnknownAction();
+        if (!_canViewPendingAction(actionId, msg.sender)) revert NoActionAccess();
+
+        return (
+            action.company,
+            action.proposer,
+            action.resourceId,
+            action.metadataHash,
+            action.actionType,
+            action.createdAt,
+            action.expiresAt,
+            action.approvalCount,
+            action.executed
         );
-        invoice.status = InvoiceStatus.Cancelled;
-        emit InvoiceCancelled(invoiceId);
+    }
+
+    function getPendingActionApprovers(bytes32 actionId) external view returns (address[] memory) {
+        if (!pendingActions[actionId].exists) revert UnknownAction();
+        if (!_canViewPendingAction(actionId, msg.sender)) revert NoActionAccess();
+        return pendingActionApprovers[actionId];
+    }
+
+    function getCompanyPendingActions(address company) external view returns (bytes32[] memory) {
+        if (!_canViewCompanyPendingActions(company, msg.sender)) revert NoActionAccess();
+        return companyPendingActions[company];
+    }
+
+    function getSealedPendingActionAmount(bytes32 actionId, bytes32 publicKey)
+        external
+        view
+        returns (uint256)
+    {
+        publicKey;
+        if (!pendingActions[actionId].exists) revert UnknownAction();
+        if (!pendingActionHasAmount[actionId]) revert ActionHasNoAmount();
+        if (!_canViewPendingAction(actionId, msg.sender)) revert NoActionAccess();
+        return euint128.unwrap(pendingActionAmounts[actionId]);
+    }
+
+    function createPayrollSchedule(
+        address company,
+        address[] calldata employees,
+        InEuint128[] calldata encryptedGrossAmounts,
+        uint64 frequency,
+        uint64 firstPaymentAt,
+        bytes32 metadataHash
+    ) external returns (bytes32 scheduleId) {
+        company;
+        employees;
+        encryptedGrossAmounts;
+        frequency;
+        firstPaymentAt;
+        metadataHash;
+        return abi.decode(_delegateWriteCall(), (bytes32));
+    }
+
+    function updatePayrollSchedule(
+        bytes32 scheduleId,
+        address[] calldata employees,
+        InEuint128[] calldata encryptedGrossAmounts,
+        uint64 frequency,
+        uint64 nextPaymentAt,
+        bytes32 metadataHash
+    ) external {
+        scheduleId;
+        employees;
+        encryptedGrossAmounts;
+        frequency;
+        nextPaymentAt;
+        metadataHash;
+        _delegateWriteCall();
+    }
+
+    function executePayroll(bytes32 scheduleId) external {
+        scheduleId;
+        _delegateWriteCall();
+    }
+
+    function cancelPayrollSchedule(bytes32 scheduleId) external {
+        scheduleId;
+        _delegateWriteCall();
+    }
+
+    function getEmployerSchedules(address employer) external view returns (bytes32[] memory) {
+        if (
+            !core.isCompanyOperator(employer, msg.sender) &&
+            !_hasAuditorScope(employer, msg.sender, IHexaPay.ComplianceScope.Payroll)
+        ) revert NoPayrollAccess();
+        return employerSchedules[employer];
+    }
+
+    function getPayrollSchedule(bytes32 scheduleId)
+        external
+        view
+        returns (
+            address employer,
+            address[] memory employees,
+            uint64 frequency,
+            uint64 nextPaymentAt,
+            bytes32 metadataHash,
+            bool active
+        )
+    {
+        PayrollSchedule storage schedule = payrollSchedules[scheduleId];
+        if (!_scheduleExists(scheduleId)) revert UnknownSchedule();
+        if (!_canViewPayrollSchedule(scheduleId, msg.sender)) revert NoPayrollAccess();
+
+        return (
+            schedule.employer,
+            schedule.employees,
+            schedule.frequency,
+            schedule.nextPaymentAt,
+            schedule.metadataHash,
+            schedule.active
+        );
+    }
+
+    function getSealedPayrollAmount(
+        bytes32 scheduleId,
+        uint256 index,
+        bytes32 publicKey
+    ) external view returns (uint256) {
+        PayrollSchedule storage schedule = payrollSchedules[scheduleId];
+        publicKey;
+        if (!_scheduleExists(scheduleId)) revert UnknownSchedule();
+        if (index >= schedule.grossAmounts.length) revert IndexOutOfBounds();
+        if (!_canViewPayrollAmount(scheduleId, index, msg.sender)) revert NoPayrollAccess();
+        return euint128.unwrap(schedule.grossAmounts[index]);
     }
 
     function _sanitizePositive(euint128 amount) internal returns (euint128) {
         return FHE.select(FHE.gt(amount, euint128.wrap(0)), amount, euint128.wrap(0));
-    }
-
-    function _allowCoreHandle(euint128 handle) internal {
-        if (euint128.unwrap(handle) == 0) {
-            return;
-        }
-
-        FHE.allow(handle, address(core));
     }
 
     function _allowAnalyticsHandle(euint128 handle) internal {
@@ -566,7 +688,12 @@ contract HexaPayWorkflowModule {
         _grantHandle(invoiceOutstanding[invoiceId], invoice.issuer, invoice.payer, invoice.company);
 
         for (uint256 i = 0; i < invoiceLineItems[invoiceId].length; i++) {
-            _grantHandle(invoiceLineItems[invoiceId][i].amount, invoice.issuer, invoice.payer, invoice.company);
+            _grantHandle(
+                invoiceLineItems[invoiceId][i].amount,
+                invoice.issuer,
+                invoice.payer,
+                invoice.company
+            );
         }
     }
 
@@ -590,10 +717,6 @@ contract HexaPayWorkflowModule {
         if (tertiary != address(0) && tertiary != primary && tertiary != secondary) {
             FHE.allow(handle, tertiary);
         }
-    }
-
-    function _isPolicyActive(address company, PolicyActionType actionType) internal view returns (bool) {
-        return core.isCompanyRegistered(company) && policyRules[company][actionType].active;
     }
 
     function _hasAuditorScope(
@@ -638,8 +761,101 @@ contract HexaPayWorkflowModule {
             _hasAuditorScope(invoice.issuer, viewer, IHexaPay.ComplianceScope.Invoice);
     }
 
+    function _canViewPendingAction(bytes32 actionId, address viewer) internal view returns (bool) {
+        PendingAction storage action = pendingActions[actionId];
+        if (!action.exists) {
+            return false;
+        }
+
+        if (
+            viewer == action.proposer ||
+            viewer == action.company ||
+            core.isCompanyOperator(action.company, viewer)
+        ) {
+            return true;
+        }
+
+        return
+            core.hasActiveComplianceGrant(action.company, viewer) ||
+            _hasAuditorScope(action.company, viewer, _scopeForAction(action.actionType));
+    }
+
+    function _canViewCompanyPendingActions(address company, address viewer)
+        internal
+        view
+        returns (bool)
+    {
+        return
+            core.isCompanyOperator(company, viewer) ||
+            core.hasActiveComplianceGrant(company, viewer) ||
+            _hasAuditorScope(company, viewer, IHexaPay.ComplianceScope.Invoice) ||
+            _hasAuditorScope(company, viewer, IHexaPay.ComplianceScope.Payroll);
+    }
+
+    function _canViewPayrollSchedule(bytes32 scheduleId, address viewer) internal view returns (bool) {
+        PayrollSchedule storage schedule = payrollSchedules[scheduleId];
+        if (!_scheduleExists(scheduleId)) {
+            return false;
+        }
+
+        if (core.isCompanyOperator(schedule.employer, viewer)) {
+            return true;
+        }
+
+        for (uint256 i = 0; i < schedule.employees.length; i++) {
+            if (viewer == schedule.employees[i]) {
+                return true;
+            }
+        }
+
+        if (_hasAuditorScope(schedule.employer, viewer, IHexaPay.ComplianceScope.Payroll)) {
+            return true;
+        }
+
+        for (uint256 i = 0; i < schedule.employees.length; i++) {
+            if (_hasAuditorScope(schedule.employees[i], viewer, IHexaPay.ComplianceScope.Payroll)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    function _canViewPayrollAmount(
+        bytes32 scheduleId,
+        uint256 index,
+        address viewer
+    ) internal view returns (bool) {
+        PayrollSchedule storage schedule = payrollSchedules[scheduleId];
+        if (!_scheduleExists(scheduleId) || index >= schedule.employees.length) {
+            return false;
+        }
+
+        return
+            core.isCompanyOperator(schedule.employer, viewer) ||
+            viewer == schedule.employees[index] ||
+            _hasAuditorScope(schedule.employer, viewer, IHexaPay.ComplianceScope.Payroll) ||
+            _hasAuditorScope(schedule.employees[index], viewer, IHexaPay.ComplianceScope.Payroll);
+    }
+
     function _isInvoiceEditable(InvoiceStatus status) internal pure returns (bool) {
         return status == InvoiceStatus.PendingApproval || status == InvoiceStatus.Approved;
+    }
+
+    function _scopeForAction(PolicyActionType actionType)
+        internal
+        pure
+        returns (IHexaPay.ComplianceScope)
+    {
+        if (actionType == PolicyActionType.PayrollExecution) {
+            return IHexaPay.ComplianceScope.Payroll;
+        }
+
+        return IHexaPay.ComplianceScope.Invoice;
+    }
+
+    function _scheduleExists(bytes32 scheduleId) internal view returns (bool) {
+        return payrollSchedules[scheduleId].scheduleId != bytes32(0);
     }
 
     function _nextInvoiceId(
@@ -653,4 +869,14 @@ contract HexaPayWorkflowModule {
         );
     }
 
+    function _delegateWriteCall() internal returns (bytes memory result) {
+        (bool success, bytes memory returndata) = writeDelegate.delegatecall(msg.data);
+        if (!success) {
+            assembly {
+                revert(add(returndata, 0x20), mload(returndata))
+            }
+        }
+
+        return returndata;
+    }
 }

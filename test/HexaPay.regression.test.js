@@ -12,7 +12,9 @@ const {
   hashText,
   randomPublicKey,
   sendAndParseEvent,
+  TEST_SETTLEMENT_DECIMALS,
   unseal,
+  unwrapAmount,
   wrapAmount
 } = require("./helpers/hexapay");
 
@@ -53,7 +55,7 @@ describe("HexaPay regression flows", function () {
 
     const escrowId = await createEscrowAndFund(escrow, owner, seller, arbiter, 100n);
     await escrow.connect(owner).releaseEscrow(escrowId, await encrypt128(100n));
-    await hexaPay.connect(owner).unwrap(await encrypt128(20n));
+    await unwrapAmount(hexaPay, owner, 20n);
 
     const ownerPermission = await createPermission(hexaPay, owner);
     const employeePermission = await createPermission(hexaPay, employee);
@@ -190,10 +192,10 @@ describe("HexaPayFactory regression", function () {
 
     const MockERC20 = await ethers.getContractFactory("MockERC20");
     const token = await MockERC20.deploy(
-      "Mock USD",
-      "mUSD",
-      18,
-      ethers.parseUnits("1000000", 18)
+      "Mock USDC",
+      "USDC",
+      TEST_SETTLEMENT_DECIMALS,
+      ethers.parseUnits("1000000", TEST_SETTLEMENT_DECIMALS)
     );
     await token.waitForDeployment();
 

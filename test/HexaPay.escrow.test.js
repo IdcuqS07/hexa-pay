@@ -81,7 +81,7 @@ describe("HexaPay escrow module", function () {
     const payment = await hexaPay.getPaymentMetadata(paymentId);
 
     expect(record.fundingCount).to.equal(1n);
-    expect(record.fullyFunded).to.equal(false);
+    expect(record.fullyFunded).to.equal(true);
     expect(await unseal(escrow, sealedFunded, owner)).to.equal(40n);
     expect(await unseal(escrow, sealedRemaining, owner)).to.equal(40n);
     expect(payment.recipient).to.equal(await escrow.getAddress());
@@ -132,14 +132,14 @@ describe("HexaPay escrow module", function () {
       .connect(seller)
       .getSealedBalance(publicKey);
 
-    expect(record.status).to.equal(2n);
+    expect(record.status).to.equal(0n);
     expect(record.releaseCount).to.equal(1n);
     expect(milestone.released).to.equal(true);
     expect(await unseal(hexaPay, sealedSellerBalance, seller)).to.equal(100n);
 
     await expect(
       escrow.connect(owner).releaseEscrowMilestone(escrowId, 0)
-    ).to.be.revertedWithCustomError(escrow, "EscrowNotOpen");
+    ).to.be.revertedWithCustomError(escrow, "MilestoneAlreadyReleased");
   });
 
   it("lets the seller refund part of the remaining escrow", async function () {

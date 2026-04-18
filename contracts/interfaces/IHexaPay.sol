@@ -48,6 +48,14 @@ interface IHexaPay {
         bool verified;
     }
 
+    struct WithdrawalRequest {
+        address requester;
+        uint64 requestedAt;
+        uint64 completedAt;
+        bool ready;
+        bool completed;
+    }
+
     struct LegacyPermission {
         bytes32 publicKey;
         bytes signature;
@@ -58,6 +66,7 @@ interface IHexaPay {
     event ComplianceModuleDeployed(address indexed complianceModule, address indexed core);
     event AnalyticsModuleDeployed(address indexed analyticsModule, address indexed core);
     event Deposit(address indexed user, bytes32 indexed depositId, uint256 timestamp);
+    event WithdrawalRequested(address indexed user, bytes32 indexed withdrawalId, uint256 timestamp);
     event PaymentInitiated(bytes32 indexed paymentId, address indexed sender, address indexed recipient);
     event PaymentCompleted(bytes32 indexed paymentId);
     event Withdrawal(address indexed user, bytes32 indexed withdrawalId, uint256 timestamp);
@@ -98,6 +107,10 @@ interface IHexaPay {
     function wrap(uint128 amount) external returns (bytes32);
 
     function unwrap(InEuint128 calldata encryptedAmount) external returns (bytes32);
+
+    function completeUnwrap(bytes32 withdrawalId) external returns (bytes32);
+
+    function getWithdrawal(bytes32 withdrawalId) external view returns (WithdrawalRequest memory);
 
     function createPayment(
         address recipient,

@@ -10,10 +10,10 @@ async function main() {
 
   const MockERC20 = await hre.ethers.getContractFactory("MockERC20");
   const token = await MockERC20.deploy(
-    "HexaPay USD",
-    "hxUSD",
-    18,
-    hre.ethers.parseUnits("1000000", 18)
+    "Mock USDC",
+    "USDC",
+    6,
+    hre.ethers.parseUnits("1000000", 6)
   );
 
   await token.waitForDeployment();
@@ -25,9 +25,9 @@ async function main() {
     network: hre.network.name,
     chainId: Number(network.chainId),
     address: tokenAddress,
-    name: "HexaPay USD",
-    symbol: "hxUSD",
-    decimals: 18,
+    name: "Mock USDC",
+    symbol: "USDC",
+    decimals: 6,
     totalSupply: totalSupply.toString(),
     deployer: deployer.address,
     deployedAt: new Date().toISOString()
@@ -37,7 +37,7 @@ async function main() {
 
   console.log("\n✅ Settlement token deployed");
   console.log("Address:", tokenAddress);
-  console.log("Total Supply:", hre.ethers.formatUnits(totalSupply, 18), "hxUSD");
+  console.log("Total Supply:", hre.ethers.formatUnits(totalSupply, 6), "USDC");
   console.log("\nSaved metadata to settlement-token.json");
   console.log("\nAdd this to your .env before deploying HexaPay:");
   console.log(`SETTLEMENT_TOKEN_ADDRESS=${tokenAddress}`);

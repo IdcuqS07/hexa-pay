@@ -507,8 +507,8 @@ function getSettlementContext() {
   const tokenAddress =
     state.coreSnapshot?.settlementToken || state.manifest?.raw?.settlementToken || "";
   const vaultAddress = state.coreSnapshot?.vault || state.manifest?.raw?.vault || "";
-  const decimals = Number(state.tokenSnapshot?.decimals || 18);
-  const symbol = state.tokenSnapshot?.symbol || "hxUSD";
+  const decimals = Number(state.tokenSnapshot?.decimals || 6);
+  const symbol = state.tokenSnapshot?.symbol || "USDC";
 
   return {
     tokenAddress: isConfiguredAddress(tokenAddress) ? tokenAddress : "",
@@ -798,6 +798,7 @@ function renderOverviewCard() {
 
 function renderSendPaymentCard() {
   const busy = state.busyAction === "send-payment";
+  const settlement = getSettlementContext();
 
   return `
     <article class="ha-card">
@@ -807,7 +808,7 @@ function renderSendPaymentCard() {
           <h3>Encrypt &amp; send</h3>
         </div>
       </div>
-      <p class="ha-card-copy">Amounts are entered as normal hxUSD decimals, encrypted in-browser, and submitted without exposing the raw value publicly.</p>
+      <p class="ha-card-copy">Amounts are entered as normal ${escapeHtml(settlement.symbol)} decimals, encrypted in-browser, and submitted without exposing the raw value publicly.</p>
       <div class="ha-form-grid">
         ${renderField("sendPayment", {
           name: "recipient",
@@ -816,10 +817,10 @@ function renderSendPaymentCard() {
         })}
         ${renderField("sendPayment", {
           name: "amount",
-          label: "Amount (hxUSD)",
+          label: `Amount (${settlement.symbol})`,
           placeholder: "0.001",
           inputmode: "decimal",
-          hint: "Human-readable decimal amount. HexaPay converts it into 18-decimal encrypted units.",
+          hint: `Human-readable decimal amount. HexaPay converts it into ${settlement.decimals}-decimal encrypted units.`,
         })}
         ${renderField("sendPayment", {
           name: "referenceHash",
@@ -876,6 +877,7 @@ function renderRegisterCompanyCard() {
 
 function renderCreateInvoiceCard() {
   const busy = state.busyAction === "create-invoice";
+  const settlement = getSettlementContext();
 
   return `
     <article class="ha-card">
@@ -899,7 +901,7 @@ function renderCreateInvoiceCard() {
         })}
         ${renderField("createInvoice", {
           name: "amount",
-          label: "Total (hxUSD)",
+          label: `Total (${settlement.symbol})`,
           placeholder: "0.001",
           inputmode: "decimal",
         })}
@@ -926,6 +928,7 @@ function renderCreateInvoiceCard() {
 function renderInvoiceOpsCard() {
   const approveBusy = state.busyAction === "approve-invoice";
   const payBusy = state.busyAction === "pay-invoice";
+  const settlement = getSettlementContext();
 
   return `
     <article class="ha-card">
@@ -944,7 +947,7 @@ function renderInvoiceOpsCard() {
         })}
         ${renderField("payInvoice", {
           name: "amount",
-          label: "Payment (hxUSD)",
+          label: `Payment (${settlement.symbol})`,
           placeholder: "0.001",
           inputmode: "decimal",
         })}
@@ -1798,7 +1801,7 @@ async function withLiveWrite(actionId, stepTitle, module, callback) {
 
 async function handleRevealBalance() {
   state.busyAction = "balance";
-  setStage(1, "Revealing private balance", "Reading the sealed balance handle and unsealing it locally.");
+  setStage(1, "Revealing private balance", "Reading the balance handle and decrypting it locally.");
   renderApp();
 
   try {
@@ -1820,11 +1823,11 @@ async function handleRevealBalance() {
       publicKey: response.publicKey,
     };
 
-    setStage(3, "Balance revealed locally", "Private balance was unsealed client-side without exposing the raw handle publicly.");
+    setStage(3, "Balance revealed locally", "Private balance was decrypted client-side without exposing the raw handle publicly.");
     setNotice({
       tone: "good",
       title: "Private balance updated",
-      summary: "Your sealed balance was unsealed locally for this browser session.",
+      summary: "Your private balance was decrypted locally for this browser session.",
       meta: [state.privateBalance.formattedBalance],
     });
   } catch (error) {
@@ -2065,7 +2068,7 @@ async function handleReadOutstanding() {
     setNotice({
       tone: "good",
       title: "Outstanding revealed locally",
-      summary: "Encrypted outstanding amount was unsealed in-browser for the selected invoice.",
+      summary: "Encrypted outstanding amount was decrypted in-browser for the selected invoice.",
       meta: [data.formattedOutstanding],
     });
   } catch (error) {

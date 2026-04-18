@@ -90,7 +90,7 @@ async function main() {
   console.log("   6. Use the compliance module for scoped audit rooms and attestations");
   console.log("   7. Use the analytics module for sealed spend, payroll, invoice, and escrow summaries");
   console.log("   8. Configure workflow policy rules if payroll or invoice actions need multi-approval");
-  console.log("   9. Local unsealing is live; public unwrap remains disabled until the async CoFHE redeem path is added");
+  console.log("   9. Use unwrap(...) to request a private USDC exit, then completeUnwrap(...) after the async decrypt is ready");
 }
 
 main()

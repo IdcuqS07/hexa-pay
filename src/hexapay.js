@@ -99,7 +99,7 @@ const FEATURE_SECTIONS = [
     highlights: [
       "Company registration on the core rail",
       "Settlement approval to the vault",
-      "Private wrap entry into hxUSD balance",
+      "Private wrap entry into the USDC balance rail",
     ],
     actionIds: [
       "core-register-company",
@@ -118,11 +118,18 @@ const FEATURE_SECTIONS = [
     tone: "good",
     verified: true,
     highlights: [
-      "Sealed balance read + local unseal",
-      "Formatted hxUSD verification output",
+      "Ciphertext read + local decrypt",
+      "Formatted private USDC verification output",
       "Encrypted internal payment send",
+      "Async unwrap back to Circle USDC testnet",
     ],
-    actionIds: ["core-read-balance", "core-create-payment"],
+    actionIds: [
+      "core-read-balance",
+      "core-create-payment",
+      "core-request-unwrap",
+      "core-read-withdrawal",
+      "core-complete-unwrap",
+    ],
   },
   {
     id: "invoices",
@@ -536,8 +543,8 @@ function renderTokenRows(snapshot) {
 }
 
 function formatSettlementAmount(value) {
-  const decimals = Number(state.tokenSnapshot?.decimals || 18);
-  const symbol = state.tokenSnapshot?.symbol || "TOKEN";
+  const decimals = Number(state.tokenSnapshot?.decimals || 6);
+  const symbol = state.tokenSnapshot?.symbol || "USDC";
 
   try {
     return `${formatUnits(BigInt(value), decimals)} ${symbol}`;
@@ -734,6 +741,7 @@ function renderRecentActivity() {
             entry.identifiers?.invoiceId ||
             entry.identifiers?.paymentId ||
             entry.identifiers?.escrowId ||
+            entry.identifiers?.withdrawalId ||
             entry.identifiers?.roomId ||
             "";
 
@@ -1420,8 +1428,8 @@ function getSettlementContext() {
   const tokenAddress =
     state.coreSnapshot?.settlementToken || state.manifest?.raw?.settlementToken || "";
   const vaultAddress = state.coreSnapshot?.vault || state.manifest?.raw?.vault || "";
-  const decimals = Number(state.tokenSnapshot?.decimals || 18);
-  const symbol = state.tokenSnapshot?.symbol || "TOKEN";
+  const decimals = Number(state.tokenSnapshot?.decimals || 6);
+  const symbol = state.tokenSnapshot?.symbol || "USDC";
 
   return {
     tokenAddress: isConfiguredAddress(tokenAddress) ? tokenAddress : "",
@@ -1506,6 +1514,80 @@ const ACTIONS = [
     },
   },
   {
+    id: "core-request-unwrap",
+    section: "Core",
+    kind: "write",
+    title: "Request unwrap",
+    description: "Start the async unwrap flow from the private rail back into Circle USDC testnet.",
+    fields: [{ name: "amount", label: "Amount", placeholder: "25" }],
+    async prepare(values) {
+      const settlement = getSettlementContext();
+      const encrypted = await buildEncryptedAmount(state.fhenix, values.amount, {
+        allowPlaceholder: true,
+      });
+
+      return {
+        contractKey: "core",
+        functionName: "unwrap",
+        address: state.addresses.core || "",
+        args: [encrypted.payload],
+        placeholder: encrypted.placeholder,
+        notes: [
+          `${settlement.symbol} uses ${settlement.decimals} decimals.`,
+          "unwrap() now creates an async withdrawal request. Complete it after the decrypt result is ready.",
+        ],
+      };
+    },
+  },
+  {
+    id: "core-read-withdrawal",
+    section: "Core",
+    kind: "read",
+    title: "Read withdrawal",
+    description: "Inspect whether an async unwrap request is ready to complete.",
+    fields: [{ name: "withdrawalId", label: "Withdrawal id", placeholder: "0xWithdrawalId" }],
+    async prepare(values) {
+      const address = requireConfiguredContractAddress("core");
+      return {
+        address,
+        withdrawalId: values.withdrawalId,
+      };
+    },
+    async read(prepared) {
+      const contract = getContract("core", prepared.address, requireAlignedReadRunner());
+      const withdrawal = await contract.getWithdrawal(prepared.withdrawalId);
+
+      return {
+        summary: "Withdrawal status loaded from the core contract.",
+        data: toDisplayObject(withdrawal),
+        notes: [
+          withdrawal.ready
+            ? "The async decrypt result is ready. You can call completeUnwrap next."
+            : "The decrypt result is still pending. Retry after a short delay.",
+        ],
+      };
+    },
+  },
+  {
+    id: "core-complete-unwrap",
+    section: "Core",
+    kind: "write",
+    title: "Complete unwrap",
+    description: "Finalize an async unwrap request once the decrypt result is ready.",
+    fields: [{ name: "withdrawalId", label: "Withdrawal id", placeholder: "0xWithdrawalId" }],
+    async prepare(values) {
+      return {
+        contractKey: "core",
+        functionName: "completeUnwrap",
+        address: state.addresses.core || "",
+        args: [values.withdrawalId],
+        notes: [
+          "This final step releases public USDC from the HexaPay vault back to the connected wallet.",
+        ],
+      };
+    },
+  },
+  {
     id: "core-create-payment",
     section: "Core",
     kind: "write",
@@ -1544,7 +1626,7 @@ const ACTIONS = [
     section: "Core",
     kind: "read",
     title: "Read my balance",
-    description: "Fetch your balance handle from the core rail and unseal it locally in the browser.",
+    description: "Fetch your balance handle from the core rail and decrypt it locally in the browser.",
     fields: [],
     async prepare() {
       const address = requireConfiguredContractAddress("core");
@@ -1562,7 +1644,7 @@ const ACTIONS = [
       );
 
       return {
-        summary: "Private balance handle was read from the core contract and unsealed locally.",
+        summary: "Private balance handle was read from the core contract and decrypted locally.",
         data: {
           account: state.runtime.account,
           sealedBalance: response.sealedValue,
@@ -1570,7 +1652,7 @@ const ACTIONS = [
           formattedBalance: formatSettlementAmount(response.clearValue),
           publicKey: response.publicKey,
         },
-        notes: ["CoFHE keeps the active permit client-side and uses it only for local unsealing."],
+        notes: ["CoFHE keeps the active permit client-side and uses it only for local decrypts."],
       };
     },
   },
@@ -1786,7 +1868,7 @@ const ACTIONS = [
     section: "Workflow",
     kind: "read",
     title: "Read sealed invoice outstanding",
-    description: "Fetch the encrypted outstanding balance and unseal it locally in-browser.",
+    description: "Fetch the encrypted outstanding balance and decrypt it locally in-browser.",
     fields: [{ name: "invoiceId", label: "On-chain invoice id", placeholder: "0xInvoiceId" }],
     async prepare(values) {
       requireAlignedProvider();
@@ -1816,7 +1898,7 @@ const ACTIONS = [
       upsertInvoiceSnapshot(prepared.args[0], data);
 
       return {
-        summary: "Encrypted invoice outstanding amount was unsealed locally.",
+        summary: "Encrypted invoice outstanding amount was decrypted locally.",
         data,
       };
     },
@@ -1892,7 +1974,7 @@ const ACTIONS = [
     section: "Escrow",
     kind: "read",
     title: "Read sealed remaining balance",
-    description: "Fetch and locally unseal the private remaining amount in escrow.",
+    description: "Fetch and locally decrypt the private remaining amount in escrow.",
     fields: [{ name: "escrowId", label: "Escrow id", placeholder: "ESCROW-2026-001" }],
     async prepare(values) {
       requireAlignedProvider();
@@ -1912,7 +1994,7 @@ const ACTIONS = [
       );
 
       return {
-        summary: "Remaining escrow balance was unsealed locally for the connected user.",
+        summary: "Remaining escrow balance was decrypted locally for the connected user.",
         data: {
           escrowId: prepared.args[0],
           sealedRemaining: response.sealedValue,

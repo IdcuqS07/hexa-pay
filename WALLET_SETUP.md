@@ -38,7 +38,7 @@ Then fill:
 ARB_SEPOLIA_RPC=https://sepolia-rollup.arbitrum.io/rpc
 PRIVATE_KEY=0xyour_private_key_here
 ARBISCAN_API_KEY=
-SETTLEMENT_TOKEN_ADDRESS=0xyour_test_erc20_here
+SETTLEMENT_TOKEN_ADDRESS=0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d
 ```
 
 If you do not have a test token yet, deploy one first:
@@ -69,5 +69,5 @@ npm run deploy
 
 - Keep `PRIVATE_KEY` secret and never commit `.env`.
 - `PRIVATE_KEY` should include the `0x` prefix.
-- `SETTLEMENT_TOKEN_ADDRESS` is required on `arb-sepolia`.
+- `SETTLEMENT_TOKEN_ADDRESS` now defaults to Circle USDC on Arbitrum Sepolia testnet.
 - The UI is now configured to default to Arbitrum Sepolia and reads `deployment.json` after deploy.

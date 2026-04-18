@@ -2,6 +2,8 @@ const hre = require("hardhat");
 const fs = require("fs");
 const path = require("path");
 
+const ARBITRUM_SEPOLIA_CIRCLE_USDC = "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d";
+
 async function main() {
   const network = await hre.ethers.provider.getNetwork();
   console.log(`🚀 Deploying HexaPay contracts to ${hre.network.name} (chainId ${network.chainId})...\n`);
@@ -16,19 +18,22 @@ async function main() {
 
   if (!settlementTokenAddress) {
     if (hre.network.name === "localhost" || hre.network.name === "hardhat") {
-      console.log("🧪 No settlement token configured, deploying MockERC20 for local use...");
+      console.log("🧪 No settlement token configured, deploying Mock USDC for local use...");
 
       const MockERC20 = await hre.ethers.getContractFactory("MockERC20");
       const mockToken = await MockERC20.deploy(
-        "Mock USD",
-        "mUSD",
-        18,
-        hre.ethers.parseUnits("1000000", 18)
+        "Mock USDC",
+        "USDC",
+        6,
+        hre.ethers.parseUnits("1000000", 6)
       );
       await mockToken.waitForDeployment();
 
       settlementTokenAddress = await mockToken.getAddress();
       console.log("✅ MockERC20 deployed to:", settlementTokenAddress);
+    } else if (hre.network.name === "arb-sepolia") {
+      settlementTokenAddress = ARBITRUM_SEPOLIA_CIRCLE_USDC;
+      console.log("Using Circle USDC testnet address:", settlementTokenAddress);
     } else {
       throw new Error(
         "SETTLEMENT_TOKEN_ADDRESS is required on arb-sepolia. Point it to a test ERC-20 before deploying."

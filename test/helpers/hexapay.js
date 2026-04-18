@@ -2,11 +2,13 @@ const hre = require("hardhat");
 const { ethers } = hre;
 const { setCode } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
 
-const FHE_PRECOMPILE_ADDRESS = "0x0000000000000000000000000000000000000080";
+const TASK_MANAGER_ADDRESS = "0xeA30c4B8b44078Bbf8a6ef5b9f1eC1626C7848D9";
+const EUINT128_TFHE = 6;
+const TEST_SETTLEMENT_DECIMALS = 6;
 
 async function installMockFheOps() {
-  const artifact = await hre.artifacts.readArtifact("HexaPayMockFheOps");
-  await setCode(FHE_PRECOMPILE_ADDRESS, artifact.deployedBytecode);
+  const artifact = await hre.artifacts.readArtifact("HexaPayMockTaskManager");
+  await setCode(TASK_MANAGER_ADDRESS, artifact.deployedBytecode);
 }
 
 async function deployHexaPayFixture() {
@@ -26,10 +28,10 @@ async function deployHexaPayFixture() {
 
   const MockERC20 = await ethers.getContractFactory("MockERC20");
   const token = await MockERC20.deploy(
-    "Mock USD",
-    "mUSD",
-    18,
-    ethers.parseUnits("1000000", 18)
+    "Mock USDC",
+    "USDC",
+    TEST_SETTLEMENT_DECIMALS,
+    ethers.parseUnits("1000000", TEST_SETTLEMENT_DECIMALS)
   );
   await token.waitForDeployment();
 
@@ -121,7 +123,12 @@ async function createPermission(contract, signer, publicKey = randomPublicKey())
 }
 
 async function encrypt128(value) {
-  return hre.fhenixjs.encrypt_uint128(BigInt(value));
+  return {
+    ctHash: BigInt(value),
+    securityZone: 0,
+    utype: EUINT128_TFHE,
+    signature: "0x"
+  };
 }
 
 async function encrypt128Array(values) {
@@ -129,7 +136,9 @@ async function encrypt128Array(values) {
 }
 
 async function unseal(contract, sealedValue, viewer) {
-  return hre.fhenixjs.unseal(await contract.getAddress(), sealedValue, viewer.address);
+  contract;
+  viewer;
+  return BigInt(sealedValue);
 }
 
 async function registerCompany(hexaPay, actor, slug, options = {}) {
@@ -151,6 +160,20 @@ async function wrapAmount(token, hexaPay, source, actor, amount) {
   await addSettlementBalance(token, source, actor, amount);
   await token.connect(actor).approve(await hexaPay.vault(), amount);
   await hexaPay.connect(actor).wrap(amount);
+}
+
+async function unwrapAmount(hexaPay, actor, amount, delaySeconds = 15) {
+  const withdrawal = await sendAndParseEvent(
+    hexaPay.connect(actor).unwrap(await encrypt128(amount)),
+    hexaPay,
+    "WithdrawalRequested"
+  );
+
+  await ethers.provider.send("evm_increaseTime", [delaySeconds]);
+  await ethers.provider.send("evm_mine", []);
+  await hexaPay.connect(actor).completeUnwrap(withdrawal.withdrawalId);
+
+  return withdrawal.withdrawalId;
 }
 
 async function createComplianceRoom(
@@ -215,13 +238,16 @@ module.exports = {
   deployHexaPayFixture,
   encrypt128,
   encrypt128Array,
-  FHE_PRECOMPILE_ADDRESS,
+  FHE_PRECOMPILE_ADDRESS: TASK_MANAGER_ADDRESS,
   getTxTimestamp,
   hashText,
   installMockFheOps,
   randomPublicKey,
   registerCompany,
   sendAndParseEvent,
+  TASK_MANAGER_ADDRESS,
+  TEST_SETTLEMENT_DECIMALS,
   unseal,
+  unwrapAmount,
   wrapAmount
 };

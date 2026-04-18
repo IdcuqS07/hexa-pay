@@ -90,8 +90,8 @@ PRIVATE_KEY=${wallet.privateKey}
 # Arbiscan API Key (optional)
 ARBISCAN_API_KEY=
 
-# Settlement token used by HexaPay core on arb-sepolia
-SETTLEMENT_TOKEN_ADDRESS=
+# Circle USDC on Arbitrum Sepolia testnet
+SETTLEMENT_TOKEN_ADDRESS=0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d
 
 # Contract Addresses (filled after deployment)
 HEXAPAY_FACTORY_ADDRESS=

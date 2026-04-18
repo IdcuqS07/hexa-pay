@@ -13,10 +13,21 @@ module.exports = defineConfig({
         find: /^tweetnacl$/,
         replacement: resolve(__dirname, "src/contracts/tweetnacl-shim.js"),
       },
+      {
+        find: /^iframe-shared-storage$/,
+        replacement: resolve(__dirname, "src/contracts/iframe-shared-storage-shim.js"),
+      },
     ],
   },
   optimizeDeps: {
-    exclude: ["cofhejs", "cofhejs/web", "tfhe"],
+    exclude: [
+      "@cofhe/sdk",
+      "@cofhe/sdk/web",
+      "@cofhe/sdk/adapters",
+      "@cofhe/sdk/chains",
+      "iframe-shared-storage",
+      "tfhe",
+    ],
   },
   server: {
     port: 3000,
@@ -25,6 +36,9 @@ module.exports = defineConfig({
   },
   preview: {
     headers: isolationHeaders,
+  },
+  worker: {
+    format: "es",
   },
   build: {
     outDir: 'dist',

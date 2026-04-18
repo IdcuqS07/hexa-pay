@@ -18,7 +18,10 @@ contract HexaPay {
     uint16 public constant BPS_DENOMINATOR = 10_000;
     uint16 public constant MAX_FEE_BPS = 1_000;
 
-    error AsyncUnwrapNotSupported();
+    error NotWithdrawalRequester();
+    error UnknownWithdrawal();
+    error WithdrawalAlreadyCompleted();
+    error WithdrawalNotReady();
 
     enum PaymentKind {
         Transfer,
@@ -40,6 +43,15 @@ contract HexaPay {
         bytes32 referenceHash;
         PaymentKind kind;
         bool completed;
+    }
+
+    struct WithdrawalRequest {
+        address requester;
+        uint64 requestedAt;
+        uint64 completedAt;
+        uint256 amountHandle;
+        bool completed;
+        bool exists;
     }
 
     struct ComplianceGrant {
@@ -93,8 +105,10 @@ contract HexaPay {
     mapping(address => mapping(address => bool)) public companySignerApprovals;
     mapping(address => address[]) private companySigners;
     mapping(address => bool) public authorizedModules;
+    mapping(bytes32 => WithdrawalRequest) private withdrawalRequests;
 
     uint256 private paymentNonce;
+    uint256 private withdrawalNonce;
     bool private entered;
 
     event WorkflowModuleDeployed(address indexed workflowModule, address indexed core);
@@ -102,6 +116,7 @@ contract HexaPay {
     event ComplianceModuleDeployed(address indexed complianceModule, address indexed core);
     event AnalyticsModuleDeployed(address indexed analyticsModule, address indexed core);
     event Deposit(address indexed user, bytes32 indexed depositId, uint256 timestamp);
+    event WithdrawalRequested(address indexed user, bytes32 indexed withdrawalId, uint256 timestamp);
     event PaymentInitiated(bytes32 indexed paymentId, address indexed sender, address indexed recipient);
     event PaymentCompleted(bytes32 indexed paymentId);
     event Withdrawal(address indexed user, bytes32 indexed withdrawalId, uint256 timestamp);
@@ -227,11 +242,59 @@ contract HexaPay {
     }
 
     /**
-     * @notice Unwrap is intentionally deferred until the suite adopts async decrypt callbacks.
+     * @notice Request an async unwrap from the confidential balance rail back into the settlement token.
+     * @dev Completion happens through `completeUnwrap` once the decrypt result is ready.
      */
     function unwrap(InEuint128 calldata encryptedAmount) external nonReentrant returns (bytes32) {
-        encryptedAmount;
-        revert AsyncUnwrapNotSupported();
+        require(suiteInitialized, "Suite not initialized");
+
+        euint128 requestedAmount = _sanitizePositive(FHE.asEuint128(encryptedAmount));
+        euint128 settledAmount = FHE.min(_balanceOf(msg.sender), requestedAmount);
+
+        _debitUnchecked(msg.sender, settledAmount);
+        FHE.allowThis(settledAmount);
+        FHE.decrypt(settledAmount);
+
+        bytes32 withdrawalId = _nextWithdrawalId(msg.sender);
+        withdrawalRequests[withdrawalId] = WithdrawalRequest({
+            requester: msg.sender,
+            requestedAt: uint64(block.timestamp),
+            completedAt: 0,
+            amountHandle: euint128.unwrap(settledAmount),
+            completed: false,
+            exists: true
+        });
+
+        emit WithdrawalRequested(msg.sender, withdrawalId, block.timestamp);
+        return withdrawalId;
+    }
+
+    /**
+     * @notice Finalize a previously requested unwrap after the async decrypt completes.
+     */
+    function completeUnwrap(bytes32 withdrawalId) external nonReentrant returns (bytes32) {
+        WithdrawalRequest storage request = withdrawalRequests[withdrawalId];
+
+        if (!request.exists) revert UnknownWithdrawal();
+        if (request.requester != msg.sender) revert NotWithdrawalRequester();
+        if (request.completed) revert WithdrawalAlreadyCompleted();
+
+        euint128 decryptedHandle = euint128.wrap(request.amountHandle);
+        (uint128 amount, bool decrypted) = FHE.getDecryptResultSafe(decryptedHandle);
+
+        if (!decrypted) revert WithdrawalNotReady();
+
+        request.completed = true;
+        request.completedAt = uint64(block.timestamp);
+
+        if (amount > 0) {
+            totalWrapped = FHE.sub(totalWrapped, decryptedHandle);
+            _refreshTotalPermissions();
+            vault.pushTo(msg.sender, amount);
+        }
+
+        emit Withdrawal(msg.sender, withdrawalId, block.timestamp);
+        return withdrawalId;
     }
 
     /**
@@ -553,6 +616,31 @@ contract HexaPay {
         return payments[paymentId];
     }
 
+    function getWithdrawal(bytes32 withdrawalId)
+        external
+        view
+        returns (
+            address requester,
+            uint64 requestedAt,
+            uint64 completedAt,
+            bool ready,
+            bool completed
+        )
+    {
+        WithdrawalRequest memory request = withdrawalRequests[withdrawalId];
+        if (!request.exists) revert UnknownWithdrawal();
+
+        (, ready) = FHE.getDecryptResultSafe(euint128.wrap(request.amountHandle));
+
+        return (
+            request.requester,
+            request.requestedAt,
+            request.completedAt,
+            ready,
+            request.completed
+        );
+    }
+
     function getBackingBalance() external view returns (uint256) {
         if (!suiteInitialized) {
             return 0;
@@ -816,6 +904,13 @@ contract HexaPay {
         paymentNonce += 1;
         return keccak256(
             abi.encodePacked(address(this), sender, recipient, referenceHash, kind, paymentNonce)
+        );
+    }
+
+    function _nextWithdrawalId(address requester) internal returns (bytes32) {
+        withdrawalNonce += 1;
+        return keccak256(
+            abi.encodePacked(address(this), requester, block.chainid, block.timestamp, withdrawalNonce)
         );
     }
 }

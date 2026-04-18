@@ -157,7 +157,8 @@ describe("HexaPay policy engine", function () {
   });
 
   it("executes invoice payment through a pending action", async function () {
-    const { hexaPay, owner, payer, signer, token, workflow } = await createBaseFixture();
+    const { owner, payer, signer, token, workflow, hexaPay } = await createBaseFixture();
+    const publicKey = randomPublicKey();
 
     await registerCompany(hexaPay, owner, "issuer-policy-exec");
     await registerCompany(hexaPay, payer, "payer-policy-exec");
@@ -189,10 +190,14 @@ describe("HexaPay policy engine", function () {
 
     const invoice = await workflow.connect(owner).getInvoice(invoiceId);
     const invoicePayments = await workflow.connect(owner).getInvoicePayments(invoiceId);
+    const sealedOutstanding = await workflow
+      .connect(owner)
+      .getSealedInvoiceOutstanding(invoiceId, publicKey);
     const action = await workflow.connect(payer).getPendingAction(actionId);
 
     expect(action.executed).to.equal(true);
-    expect(invoice.status).to.equal(4n);
+    expect(invoice.status).to.equal(3n);
+    expect(await unseal(workflow, sealedOutstanding, owner)).to.equal(0n);
     expect(invoicePayments).to.deep.equal([executionArgs.resultId]);
   });
 

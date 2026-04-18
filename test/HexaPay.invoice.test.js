@@ -138,7 +138,7 @@ describe("HexaPay invoices", function () {
     expect(payment.kind).to.equal(2n);
   });
 
-  it("marks an invoice as paid when outstanding reaches zero", async function () {
+  it("keeps the public invoice status opaque while outstanding reaches zero", async function () {
     const { hexaPay, invoiceId, owner, payer, token, workflow } = await createInvoiceContext();
     const publicKey = randomPublicKey();
 
@@ -151,19 +151,27 @@ describe("HexaPay invoices", function () {
       .connect(owner)
       .getSealedInvoiceOutstanding(invoiceId, publicKey);
 
-    expect(invoice.status).to.equal(4n);
+    expect(invoice.status).to.equal(3n);
     expect(await unseal(workflow, sealedOutstanding, owner)).to.equal(0n);
   });
 
-  it("blocks paying more than the encrypted outstanding balance", async function () {
+  it("clamps invoice payments to the encrypted outstanding balance", async function () {
     const { hexaPay, invoiceId, owner, payer, token, workflow } = await createInvoiceContext();
+    const publicKey = randomPublicKey();
 
     await workflow.connect(payer).approveInvoice(invoiceId);
     await wrapAmount(token, hexaPay, owner, payer, 500n);
 
-    await expect(
-      workflow.connect(payer).payInvoice(invoiceId, await encrypt128(120n))
-    ).to.be.reverted;
+    await payInvoiceAndGetPaymentId(workflow, payer, invoiceId, 120n);
+
+    const invoice = await workflow.connect(owner).getInvoice(invoiceId);
+    const sealedOutstanding = await workflow
+      .connect(owner)
+      .getSealedInvoiceOutstanding(invoiceId, publicKey);
+
+    expect(invoice.paymentCount).to.equal(1n);
+    expect(invoice.status).to.equal(3n);
+    expect(await unseal(workflow, sealedOutstanding, owner)).to.equal(0n);
   });
 
   it("links invoice payments back to created payment ids", async function () {

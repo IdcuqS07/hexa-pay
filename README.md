@@ -19,6 +19,14 @@ The current repository includes:
 - Confidential analytics: support sealed reporting and business checkpoints for treasury and finance operations.
 - Escrow and dispute readiness: the contract suite already includes escrow and dispute-oriented modules for broader financial workflows.
 
+## Testnet Settlement Target
+
+Default settlement target for new testnet deployments:
+
+- Circle USDC on Arbitrum Sepolia: [`0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d`](https://sepolia.arbiscan.io/address/0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d)
+
+HexaPay now treats this as the default settlement rail for `arb-sepolia` deploys unless you explicitly override `SETTLEMENT_TOKEN_ADDRESS`.
+
 ## Product Surfaces
 
 - `index.html`: HexaPay home and product overview
@@ -37,7 +45,7 @@ Current deployment target: `Arbitrum Sepolia`
 - Escrow Module: [`0x6e2C9137A773d3E36Ef0F9aF07899D92E32170b1`](https://sepolia.arbiscan.io/address/0x6e2C9137A773d3E36Ef0F9aF07899D92E32170b1)
 - Compliance Module: [`0x2b86C5E67287FC29AA7fa1f02a487EeA00227207`](https://sepolia.arbiscan.io/address/0x2b86C5E67287FC29AA7fa1f02a487EeA00227207)
 - Analytics Module: [`0x66BA4df1eaAdcd4c32B1843BF283eD89A006a9d7`](https://sepolia.arbiscan.io/address/0x66BA4df1eaAdcd4c32B1843BF283eD89A006a9d7)
-- Settlement Token: [`0xe378E93D5eC4dDa719355c5274d85e97c3a0A500`](https://sepolia.arbiscan.io/address/0xe378E93D5eC4dDa719355c5274d85e97c3a0A500)
+- Default Testnet Settlement Token: [`0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d`](https://sepolia.arbiscan.io/address/0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d)
 
 ## Repository Layout
 
@@ -84,6 +92,7 @@ npm run test
 npm run deploy
 npm run deploy:token
 npm run bootstrap-wrap
+npm run bootstrap-unwrap
 npm run setup-wallet
 npm run interact
 ```
@@ -92,7 +101,7 @@ npm run interact
 
 HexaPay is structured as a modular confidential finance suite:
 
-- `HexaPay.sol`: confidential balance rail, wrap and unwrap, private transfers, compliance base, company registry
+- `HexaPay.sol`: confidential balance rail, async unwrap requests, private transfers, compliance base, company registry
 - `HexaPayWorkflowModule.sol`: confidential invoices, payroll, and policy-based approvals
 - `HexaPayEscrowModule.sol`: escrow funding, milestone release, refunds, disputes
 - `HexaPayComplianceModule.sol`: scoped compliance rooms, audit artifacts, access logs
@@ -109,5 +118,6 @@ The active roadmap is tracked in [ROADMAP_HEXAPAY.md](./ROADMAP_HEXAPAY.md). The
 ## Environment Notes
 
 - Copy `.env.example` into `.env` before running deployment or network-specific scripts.
+- `.env.example` now defaults `SETTLEMENT_TOKEN_ADDRESS` to Circle USDC on Arbitrum Sepolia testnet.
 - `deployment.json` is intentionally ignored from git in the current setup.
 - The app currently targets Arbitrum Sepolia for the live product flow and Fhenix tooling for encrypted operations.

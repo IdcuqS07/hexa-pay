@@ -1,5 +1,4 @@
 require("@nomicfoundation/hardhat-toolbox");
-require("cofhe-hardhat-plugin");
 require("dotenv").config();
 
 const ARB_SEPOLIA_CHAIN_ID = 421614;

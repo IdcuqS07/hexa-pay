@@ -1,6 +1,6 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
-const { deployHexaPayFixture } = require("./helpers/hexapay");
+const { deployHexaPayFixture, TEST_SETTLEMENT_DECIMALS } = require("./helpers/hexapay");
 
 describe("HexaPay", function () {
   let hexaPay;
@@ -252,10 +252,10 @@ describe("HexaPayFactory", function () {
 
     const MockERC20 = await ethers.getContractFactory("MockERC20");
     token = await MockERC20.deploy(
-      "Mock USD",
-      "mUSD",
-      18,
-      ethers.parseUnits("1000000", 18)
+      "Mock USDC",
+      "USDC",
+      TEST_SETTLEMENT_DECIMALS,
+      ethers.parseUnits("1000000", TEST_SETTLEMENT_DECIMALS)
     );
     await token.waitForDeployment();
 

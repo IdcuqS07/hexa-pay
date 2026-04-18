@@ -36,7 +36,7 @@ HexaPay is now structured as an asset-backed confidential payment rail for Fheni
 6. `HexaPayVault.sol`
    - Isolated custody layer for the settlement token
    - Pulls approved ERC20 funds in during wrap
-   - Pushes ERC20 funds out during unwrap
+   - Pushes ERC20 funds out during async unwrap completion
 
 7. `HexaPayFactory.sol`
    - Deploys isolated HexaPay suites from caller-supplied creation bytecode
@@ -70,7 +70,8 @@ HexaPay follows a realistic wrap-transfer-unwrap pattern:
 3. Contract pulls real ERC20 funds into `HexaPayVault`.
 4. User receives an encrypted internal balance in `HexaPay`.
 5. Private transfers happen in `HexaPay`, while invoice/payroll and escrow workflows route through dedicated suite modules.
-6. User calls `unwrap(inEuint128 encryptedAmount)` to redeem public ERC20 tokens.
+6. User calls `unwrap(inEuint128 encryptedAmount)` to request a public ERC20 exit.
+7. User calls `completeUnwrap(bytes32 withdrawalId)` after the async decrypt result becomes ready.
 
 This keeps asset backing real while preserving balance and payment privacy inside the payment rail.
 
@@ -138,6 +139,8 @@ This keeps asset backing real while preserving balance and payment privacy insid
 ### User operations
 - `wrap(uint128 amount)`
 - `unwrap(inEuint128 encryptedAmount)`
+- `completeUnwrap(bytes32 withdrawalId)`
+- `getWithdrawal(bytes32 withdrawalId)`
 - `createPayment(address recipient, inEuint128 encryptedAmount, bytes32 referenceHash)`
 - `workflowModule()`
 - `escrowModule()`
@@ -233,8 +236,8 @@ Set a settlement token in `.env`:
 
 ```env
 PRIVATE_KEY=...
-FHENIX_TESTNET_RPC_URL=https://api.helium.fhenix.zone
-SETTLEMENT_TOKEN_ADDRESS=0xYourSettlementToken
+ARB_SEPOLIA_RPC=https://sepolia-rollup.arbitrum.io/rpc
+SETTLEMENT_TOKEN_ADDRESS=0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d
 ```
 
 Then deploy:
@@ -244,6 +247,8 @@ npm run deploy
 ```
 
 ## Example flow
+
+These examples assume `client` is an `@cofhe/sdk` client that is already connected, and that `Encryptable` and `FheTypes` are imported from `@cofhe/sdk`.
 
 ### Wrap public tokens
 
@@ -255,7 +260,9 @@ await hexaPay.wrap(amount);
 ### Create a confidential payment
 
 ```javascript
-const encryptedAmount = await client.encrypt_uint128(500n);
+const [encryptedAmount] = await client
+  .encryptInputs([Encryptable.uint128(500n)])
+  .execute();
 
 await hexaPay.createPayment(
   recipientAddress,
@@ -267,7 +274,9 @@ await hexaPay.createPayment(
 ### Create and approve a confidential invoice
 
 ```javascript
-const encryptedInvoiceTotal = await client.encrypt_uint128(5000n);
+const [encryptedInvoiceTotal] = await client
+  .encryptInputs([Encryptable.uint128(5000n)])
+  .execute();
 const HexaPayWorkflowModule = await ethers.getContractFactory("HexaPayWorkflowModule");
 const workflowAddress = await hexaPay.workflowModule();
 const workflow = HexaPayWorkflowModule.attach(workflowAddress);
@@ -291,7 +300,9 @@ await workflow.connect(payer).approveInvoice(invoiceId);
 ### Queue a treasury-approved invoice payment
 
 ```javascript
-const encryptedAmount = await client.encrypt_uint128(2500n);
+const [encryptedAmount] = await client
+  .encryptInputs([Encryptable.uint128(2500n)])
+  .execute();
 
 const actionId = await workflow.proposeInvoicePayment(
   invoiceId,
@@ -308,7 +319,9 @@ await workflow.connect(treasurySigner).executePendingAction(actionId);
 ### Create and settle a confidential escrow
 
 ```javascript
-const encryptedEscrowTotal = await client.encrypt_uint128(10000n);
+const [encryptedEscrowTotal] = await client
+  .encryptInputs([Encryptable.uint128(10000n)])
+  .execute();
 const HexaPayEscrowModule = await ethers.getContractFactory("HexaPayEscrowModule");
 const escrowAddress = await hexaPay.escrowModule();
 const escrow = HexaPayEscrowModule.attach(escrowAddress);
@@ -365,22 +378,27 @@ await checkpointTx.wait();
 ### Read your balance
 
 ```javascript
-const publicKey = client.getPublicKey();
-const sealedBalance = await hexaPay.getSealedBalance(publicKey);
-const balance = await client.unseal(sealedBalance);
+const permit = await client.permits.getOrCreateSelfPermit();
+const balanceHandle = await hexaPay.getSealedBalance(permit.sealingPair.publicKey);
+const balance = await client
+  .decryptForView(balanceHandle, FheTypes.Uint128)
+  .execute();
 ```
 
 ### Unwrap to public ERC20
 
 ```javascript
-const encryptedAmount = await client.encrypt_uint128(250n);
-await hexaPay.unwrap(encryptedAmount);
+const [encryptedAmount] = await client
+  .encryptInputs([Encryptable.uint128(250n)])
+  .execute();
+const withdrawalId = await hexaPay.unwrap(encryptedAmount);
+await hexaPay.completeUnwrap(withdrawalId);
 ```
 
 ## Security notes
 
 - The vault is separated from confidential accounting logic.
-- `wrap` and `unwrap` are protected with a reentrancy guard.
+- `wrap`, `unwrap`, and `completeUnwrap` are protected with a reentrancy guard.
 - Invoice settlement and payroll now live in a dedicated workflow module while still reusing the same confidential debit and credit checks from the core rail.
 - Escrow custody is kept inside the same encrypted rail by moving funds into the escrow module address instead of unwrapping them.
 - Scoped compliance rooms are enforced on read access through the core and module authorization helpers, while legacy broad grants remain available as a fallback path.
