@@ -39,14 +39,16 @@ HexaPay now treats this as the default settlement rail for `arb-sepolia` deploys
 Current deployment target: `Arbitrum Sepolia`
 
 - Explorer base: <https://sepolia.arbiscan.io>
-- Factory: [`0xE39da42fED8fCB816f20F0176e1A4c94213c133c`](https://sepolia.arbiscan.io/address/0xE39da42fED8fCB816f20F0176e1A4c94213c133c)
-- HexaPay Core: [`0xceac99B0CCb3c2418A0b59d751AD3d95E039dc60`](https://sepolia.arbiscan.io/address/0xceac99B0CCb3c2418A0b59d751AD3d95E039dc60)
-- Vault: [`0x6BF49B5D09dE43E75D692DF3299B46c077898f06`](https://sepolia.arbiscan.io/address/0x6BF49B5D09dE43E75D692DF3299B46c077898f06)
-- Workflow Module: [`0xA38c0195e312f2354F4aC186b165e538aE388Cc9`](https://sepolia.arbiscan.io/address/0xA38c0195e312f2354F4aC186b165e538aE388Cc9)
-- Escrow Module: [`0x6e2C9137A773d3E36Ef0F9aF07899D92E32170b1`](https://sepolia.arbiscan.io/address/0x6e2C9137A773d3E36Ef0F9aF07899D92E32170b1)
-- Compliance Module: [`0x2b86C5E67287FC29AA7fa1f02a487EeA00227207`](https://sepolia.arbiscan.io/address/0x2b86C5E67287FC29AA7fa1f02a487EeA00227207)
-- Analytics Module: [`0x66BA4df1eaAdcd4c32B1843BF283eD89A006a9d7`](https://sepolia.arbiscan.io/address/0x66BA4df1eaAdcd4c32B1843BF283eD89A006a9d7)
+- Factory: [`0x32c0cB019d03DbBd102Fb6Dd5554db03F183bf98`](https://sepolia.arbiscan.io/address/0x32c0cB019d03DbBd102Fb6Dd5554db03F183bf98)
+- HexaPay Core: [`0x0625D29038081FAb5e1B1a9239445a3A1d2b76AD`](https://sepolia.arbiscan.io/address/0x0625D29038081FAb5e1B1a9239445a3A1d2b76AD)
+- Vault: [`0x13C030C79F8e3ae12cDA194d2b827b622B21cB83`](https://sepolia.arbiscan.io/address/0x13C030C79F8e3ae12cDA194d2b827b622B21cB83)
+- Workflow Module: [`0x2250Db096628db699D2D3e10C4bdAd7d4922e27e`](https://sepolia.arbiscan.io/address/0x2250Db096628db699D2D3e10C4bdAd7d4922e27e)
+- Escrow Module: [`0x1E23DCbdd5da2ADF0Bf8904214463087b61a1C0d`](https://sepolia.arbiscan.io/address/0x1E23DCbdd5da2ADF0Bf8904214463087b61a1C0d)
+- Compliance Module: [`0x0472D8e66E695c77C923938D69157CF60457650E`](https://sepolia.arbiscan.io/address/0x0472D8e66E695c77C923938D69157CF60457650E)
+- Analytics Module: [`0x2C53EFE001fBB50473934f175d9617C6Ab54252E`](https://sepolia.arbiscan.io/address/0x2C53EFE001fBB50473934f175d9617C6Ab54252E)
 - Default Testnet Settlement Token: [`0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d`](https://sepolia.arbiscan.io/address/0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d)
+
+Source of truth for the suite deployment above: [`deployment.json`](./deployment.json)
 
 ## Payment Rail
 
