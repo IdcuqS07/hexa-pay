@@ -691,6 +691,7 @@ export async function getFhenixState(runtime) {
       mode: "offline",
       client: null,
       permitHash: "",
+      publicKey: "",
       error: "",
     };
   }
@@ -715,6 +716,7 @@ export async function getFhenixState(runtime) {
       mode: "ready",
       client,
       permitHash,
+      publicKey: "",
       error: "",
     };
   } catch (error) {
@@ -724,9 +726,44 @@ export async function getFhenixState(runtime) {
       mode: "preview",
       client: null,
       permitHash: "",
+      publicKey: "",
       error: diagnostics
         ? `${serializeErrorMessage(error)} (${diagnostics})`
         : serializeErrorMessage(error),
+    };
+  }
+}
+
+export function getActivePermitBridge(fhenixState) {
+  if (!fhenixState?.client) {
+    return {
+      permitHash: String(fhenixState?.permitHash || ""),
+      publicKey: String(fhenixState?.publicKey || ""),
+    };
+  }
+
+  try {
+    const chainId = Number(fhenixState.client.connection.chainId || 0);
+    const account = normalizeAddress(fhenixState.client.connection.account || "");
+    const permitHash =
+      String(fhenixState.permitHash || "") ||
+      (chainId && account ? fhenixState.client.permits.getActivePermitHash(chainId, account) || "" : "");
+    const activePermit =
+      (chainId && account ? fhenixState.client.permits.getActivePermit(chainId, account) : null) ||
+      (permitHash && chainId && account
+        ? fhenixState.client.permits.getPermit(permitHash, chainId, account)
+        : null);
+
+    return {
+      permitHash,
+      publicKey: activePermit?.sealingPair?.publicKey
+        ? normalizeBytes32Value(activePermit.sealingPair.publicKey, "CoFHE permit public key")
+        : String(fhenixState.publicKey || ""),
+    };
+  } catch (error) {
+    return {
+      permitHash: String(fhenixState?.permitHash || ""),
+      publicKey: String(fhenixState?.publicKey || ""),
     };
   }
 }
@@ -784,10 +821,14 @@ export async function ensurePermit(fhenixState) {
   }
 
   fhenixState.permitHash = permitHash || activePermit.hash || "";
+  fhenixState.publicKey = normalizeBytes32Value(
+    activePermit.sealingPair?.publicKey,
+    "CoFHE permit public key",
+  );
 
   return {
     permit: activePermit,
-    publicKey: normalizeBytes32Value(activePermit.sealingPair?.publicKey, "CoFHE permit public key"),
+    publicKey: fhenixState.publicKey,
     permitHash: fhenixState.permitHash,
   };
 }

@@ -84,6 +84,13 @@
           </svg>
           <span>Invoices</span>
         </a>
+        <a href="#private-quotes" class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M10 2L16 5V9C16 12.8 13.6 15.9 10 17C6.4 15.9 4 12.8 4 9V5L10 2Z"/>
+            <path d="M8 9.2L9.5 10.7L12.5 7.7"/>
+          </svg>
+          <span>Private Quotes</span>
+        </a>
         <a href="#policy" class="nav-item">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M10 2L17 5V10C17 14.2 14.3 17.4 10 18C5.7 17.4 3 14.2 3 10V5L10 2Z"/>
@@ -208,6 +215,9 @@
               </div>
             </div>
           </section>
+
+          <!-- Payment Intent Widget -->
+          <div data-payment-intent-widget></div>
         </section>
 
         <section class="view-panel" data-view-panel="send" hidden>
@@ -481,6 +491,185 @@
               <div class="summary-row">
                 <span>Outstanding</span>
                 <strong>Reveal to inspect</strong>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="view-panel" data-view-panel="private-quotes" hidden>
+          <section class="operation-card panel-shell" id="private-quotes">
+            <div class="operation-head">
+              <div>
+                <span class="operation-kicker">Private Quotes</span>
+                <h2>Create merchant payment link</h2>
+              </div>
+              <span class="operation-pill">Merchant</span>
+            </div>
+            <p class="operation-copy">
+              Create a private payment quote from the main HexaPay shell. This module reuses the existing wallet session and opens a public payment route for the payer.
+            </p>
+            <div class="form-grid">
+              <label class="field">
+                <span>Payer</span>
+                <input type="text" placeholder="0xPayer" data-field="privateQuote.payer">
+              </label>
+              <label class="field">
+                <span>Amount</span>
+                <input type="text" placeholder="1" inputmode="decimal" data-field="privateQuote.amount">
+              </label>
+            </div>
+            <div class="operation-actions">
+              <button class="toolbar-btn primary" type="button" data-action="create-private-quote" data-create-private-quote-button>
+                Create Private Quote
+              </button>
+              <button class="toolbar-btn" type="button" data-command="switch-private-quote-chain" data-private-quote-switch-button>
+                Switch Network
+              </button>
+            </div>
+            <div class="helper-line" data-private-quote-helper>
+              Loading private quote module config...
+            </div>
+            <label class="field pq-store-mode-field">
+              <span>Receipt Store Mode</span>
+              <select data-private-quote-store-mode>
+                <option value="local">Local</option>
+                <option value="mock-registry">Mock Registry</option>
+                <option value="mock-api">Mock API</option>
+              </select>
+            </label>
+            <div class="summary-list" data-private-quote-summary>
+              <div class="summary-row">
+                <span>Status</span>
+                <strong>Waiting for module config</strong>
+              </div>
+              <div class="summary-row">
+                <span>Latest quote</span>
+                <strong>Create a quote to generate a payment route</strong>
+              </div>
+            </div>
+            <div class="pq-result" data-private-quote-result hidden>
+              <div class="pq-result-title">Private quote created</div>
+
+              <div class="pq-field">
+                <div class="pq-label">Quote ID</div>
+                <div class="pq-value mono" data-private-quote-id>Pending</div>
+              </div>
+
+              <div class="pq-field">
+                <div class="pq-label">Payment Link</div>
+                <div class="pq-value mono">
+                  <a data-private-quote-link href="/pay.html" target="_blank" rel="noreferrer">Open route</a>
+                </div>
+              </div>
+
+              <div class="pq-actions">
+                <button class="toolbar-btn" type="button" data-command="copy-private-quote-link">
+                  Copy Link
+                </button>
+                <a class="toolbar-btn primary" data-private-quote-open-link href="/pay.html" target="_blank" rel="noreferrer">
+                  Open Payer Page
+                </a>
+              </div>
+            </div>
+
+            <div class="pq-receipt" data-private-quote-receipt hidden>
+              <div class="pq-receipt-title">Latest Settled Receipt</div>
+
+              <div class="pq-field">
+                <div class="pq-label">Quote ID</div>
+                <div class="pq-value mono" data-private-quote-receipt-quote-id>Pending</div>
+              </div>
+
+              <div class="pq-field">
+                <div class="pq-label">Merchant</div>
+                <div class="pq-value mono" data-private-quote-receipt-merchant>Pending</div>
+              </div>
+
+              <div class="pq-field">
+                <div class="pq-label">Payer</div>
+                <div class="pq-value mono" data-private-quote-receipt-payer>Pending</div>
+              </div>
+
+              <div class="pq-field">
+                <div class="pq-label">Status</div>
+                <div class="pq-value" data-private-quote-receipt-status>Settled</div>
+              </div>
+
+              <div class="pq-field">
+                <div class="pq-label">Settled At</div>
+                <div class="pq-value" data-private-quote-receipt-settled-at>Pending</div>
+              </div>
+
+              <div class="pq-field">
+                <div class="pq-label">Transaction Hash</div>
+                <div class="pq-value mono" data-private-quote-receipt-tx-hash>Pending</div>
+              </div>
+
+              <div class="pq-field">
+                <div class="pq-label">Receipt View</div>
+                <div class="pq-value mono">
+                  <a data-private-quote-receipt-link href="/pay.html" target="_blank" rel="noreferrer">Open receipt route</a>
+                </div>
+              </div>
+
+              <div class="pq-actions">
+                <a
+                  class="toolbar-btn primary"
+                  data-private-quote-receipt-open-link
+                  href="/pay.html"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open Receipt View
+                </a>
+                <a
+                  class="toolbar-btn"
+                  data-private-quote-auditor-open-link
+                  href="/audit.html"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open Auditor View
+                </a>
+              </div>
+            </div>
+
+            <div class="pq-receipt" data-private-quote-auditor-receipt hidden>
+              <div class="pq-receipt-title">Auditor Limited View</div>
+
+              <div class="pq-field">
+                <div class="pq-label">Quote ID</div>
+                <div class="pq-value mono" data-private-quote-auditor-receipt-quote-id>Pending</div>
+              </div>
+
+              <div class="pq-field">
+                <div class="pq-label">Merchant</div>
+                <div class="pq-value mono" data-private-quote-auditor-receipt-merchant>Pending</div>
+              </div>
+
+              <div class="pq-field">
+                <div class="pq-label">Payer</div>
+                <div class="pq-value mono" data-private-quote-auditor-receipt-payer>Pending</div>
+              </div>
+
+              <div class="pq-field">
+                <div class="pq-label">Status</div>
+                <div class="pq-value" data-private-quote-auditor-receipt-status>Settled</div>
+              </div>
+
+              <div class="pq-field">
+                <div class="pq-label">Settled At</div>
+                <div class="pq-value" data-private-quote-auditor-receipt-settled-at>Pending</div>
+              </div>
+
+              <div class="pq-field">
+                <div class="pq-label">Transaction Hash</div>
+                <div class="pq-value mono" data-private-quote-auditor-receipt-tx-hash>Pending</div>
+              </div>
+
+              <div class="pq-field">
+                <div class="pq-label">Visibility</div>
+                <div class="pq-value" data-private-quote-auditor-receipt-visibility>limited</div>
               </div>
             </div>
           </section>
@@ -786,6 +975,13 @@
           <path d="M8 8H12M8 11H12M8 14H10"/>
         </svg>
         <span>Invoices</span>
+      </a>
+      <a href="#private-quotes" class="bottom-nav-item">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 3L19 7V11C19 15.4 16.2 19.1 12 20C7.8 19.1 5 15.4 5 11V7L12 3Z"/>
+          <path d="M9.5 11.5L11.5 13.5L15 10"/>
+        </svg>
+        <span>Quotes</span>
       </a>
       <a href="#policy" class="bottom-nav-item">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

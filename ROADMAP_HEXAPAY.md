@@ -16,6 +16,9 @@ The differentiator is not privacy alone. The differentiator is:
 
 **real asset settlement + encrypted internal accounting + scoped auditability + business workflows**
 
+Execution companion for the active private quote workstream:
+- `docs/private-quotes/PRIVATE_QUOTES_NEXT_PHASE_ROADMAP.md`
+
 ## Architectural direction
 
 ## One product, not one giant contract

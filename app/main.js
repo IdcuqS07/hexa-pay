@@ -33,6 +33,26 @@ import {
   switchWalletChain,
   toDisplayObject,
 } from "../src/contracts/client.js";
+import {
+  formatPrivateQuoteReceiptTime,
+  createPrivateQuote,
+  getPrivateQuoteErrorMessage,
+  loadPrivateQuoteConfig,
+} from "./private-quote.js";
+import { createReceiptAccessContext } from "./receipt-access-context.js";
+import {
+  createReceiptStore,
+  getReceiptStoreChangeKey,
+} from "./receipt-store-factory.js";
+import { ReceiptRoles } from "./receipt-types.js";
+import {
+  appendPrivateQuoteStoreMode,
+  getPrivateQuoteStoreMode,
+  getPrivateQuoteStoreModeLabel,
+  setPrivateQuoteStoreMode,
+  PRIVATE_QUOTE_STORE_MODE_STORAGE_KEY,
+} from "./config.js";
+import { mountPaymentIntentWidget } from "./payment-intent-widget.js";
 
 const RECENT_ACTIVITY_STORAGE_KEY = "hexapay_recent_activity_v1";
 const WALLET_SESSION_STORAGE_KEY = "hexapay_wallet_session_v1";
@@ -42,6 +62,7 @@ const APP_VIEWS = new Set([
   "send",
   "treasury",
   "invoices",
+  "private-quotes",
   "policy",
   "escrow",
   "compliance",
@@ -67,6 +88,12 @@ const state = {
   complianceSnapshots: {},
   analyticsSnapshots: {},
   analyticsExposure: null,
+  privateQuoteConfig: null,
+  latestQuote: null,
+  latestReceipt: null,
+  latestAuditorReceipt: null,
+  allowReceiptGrantSignature: false,
+  privateQuoteResult: null,
   notice: {
     tone: "muted",
     summary:
@@ -80,6 +107,31 @@ const state = {
 let boundWalletProvider = null;
 let boundWalletAccountsChanged = null;
 let boundWalletChainChanged = null;
+let receiptStoreMode = getPrivateQuoteStoreMode();
+let receiptStore = createReceiptStore(receiptStoreMode, {
+  accessContextResolver: ({ role, quoteId, action }) =>
+    createReceiptAccessContext({
+      role,
+      quoteId,
+      action,
+      runtime: state.runtime,
+      fhenix: state.fhenix,
+      allowGrantSignature: state.allowReceiptGrantSignature,
+    }),
+});
+let receiptStoreChangeKey = getReceiptStoreChangeKey(receiptStoreMode);
+
+function isReceiptAccessDeniedError(error, codes = []) {
+  if (!error || Number(error.statusCode || 0) !== 403) {
+    return false;
+  }
+
+  if (!Array.isArray(codes) || codes.length === 0) {
+    return true;
+  }
+
+  return codes.includes(String(error.code || ""));
+}
 
 function getInitialView() {
   if (typeof window === "undefined") {
@@ -113,6 +165,7 @@ function createDefaultFhenixState() {
     mode: "offline",
     client: null,
     permitHash: "",
+    publicKey: "",
     error: "",
   };
 }
@@ -155,6 +208,10 @@ function createDefaultForms() {
       amount: "0.001",
       metadataHash: "invoice-2026-001",
       dueAt: localDueAt,
+    },
+    privateQuote: {
+      payer: "",
+      amount: "1",
     },
     monitorInvoice: {
       invoiceId: "",
@@ -504,6 +561,38 @@ function formatTimestamp(timestamp) {
   return new Date(numeric * 1000).toLocaleString();
 }
 
+async function syncPrivateQuoteConfig({ refresh = false } = {}) {
+  state.privateQuoteConfig = await loadPrivateQuoteConfig({ refresh });
+  return state.privateQuoteConfig;
+}
+
+async function ensurePrivateQuoteConfig() {
+  return state.privateQuoteConfig || syncPrivateQuoteConfig();
+}
+
+function getPrivateQuoteChainLabel() {
+  const chainId = state.privateQuoteConfig?.chainId || DEFAULT_CHAIN_ID;
+  return getChainMetadata(chainId).label;
+}
+
+function requirePrivateQuoteRuntime() {
+  requireConnectedRuntime();
+
+  if (!state.runtime.signer) {
+    throw new Error("Reconnect the wallet before creating a private quote.");
+  }
+}
+
+function requirePrivateQuoteChain() {
+  if (!state.privateQuoteConfig) {
+    throw new Error("Private quote module config is still loading.");
+  }
+
+  if (state.runtime.chainId !== state.privateQuoteConfig.chainId) {
+    throw new Error(`Switch wallet to ${getPrivateQuoteChainLabel()} first.`);
+  }
+}
+
 function upsertInvoiceSnapshot(invoiceId, partial) {
   if (!invoiceId) {
     return;
@@ -804,6 +893,7 @@ async function refreshAppState({ requestAccounts = false, silent = false, wallet
     state.tokenSnapshot = tokenSnapshot;
     state.companySnapshot = companySnapshot;
     syncWalletListeners(runtime.walletProvider);
+    await syncLatestPrivateQuoteReceipts();
 
     if (!state.manifest) {
       setNotice("Sync manifest first so the app can discover the live contract suite.", "warn");
@@ -829,7 +919,7 @@ async function refreshAppState({ requestAccounts = false, silent = false, wallet
   }
 }
 
-function disconnectWalletSession() {
+async function disconnectWalletSession() {
   setWalletSessionEnabled(false);
   detachWalletListeners();
   state.runtime = createDefaultRuntime();
@@ -838,6 +928,7 @@ function disconnectWalletSession() {
   state.tokenSnapshot = null;
   state.companySnapshot = null;
   state.privateBalance = createDefaultPrivateBalance();
+  await syncLatestPrivateQuoteReceipts();
   setNotice("Wallet disconnected from this app session.", "muted");
 }
 
@@ -880,6 +971,7 @@ async function handleConnectWallet() {
     return;
   }
 
+  state.allowReceiptGrantSignature = true;
   await refreshAppState({
     requestAccounts: true,
     walletId: state.runtime.walletId || getStoredWalletProviderId(),
@@ -891,6 +983,7 @@ async function handleSwitchChain() {
     state.busyCommand = "switch-chain";
     render();
     await switchWalletChain(state.selectedChainId, state.runtime.walletId || getStoredWalletProviderId());
+    state.allowReceiptGrantSignature = true;
     await refreshAppState({
       silent: true,
       walletId: state.runtime.walletId || getStoredWalletProviderId(),
@@ -902,6 +995,54 @@ async function handleSwitchChain() {
     state.busyCommand = "";
     render();
   }
+}
+
+async function handleSwitchPrivateQuoteChain() {
+  const config = await ensurePrivateQuoteConfig();
+
+  try {
+    state.busyCommand = "switch-private-quote-chain";
+    render();
+
+    if (!state.runtime.connected) {
+      state.allowReceiptGrantSignature = true;
+      await refreshAppState({
+        requestAccounts: true,
+        silent: true,
+        walletId: state.runtime.walletId || getStoredWalletProviderId(),
+      });
+    }
+
+    await switchWalletChain(config.chainId, state.runtime.walletId || getStoredWalletProviderId());
+    state.allowReceiptGrantSignature = true;
+    await refreshAppState({
+      silent: true,
+      walletId: state.runtime.walletId || getStoredWalletProviderId(),
+    });
+    setNotice(`Wallet switched to ${getChainMetadata(config.chainId).label} for private quotes.`, "good");
+  } catch (error) {
+    setNotice(getPrivateQuoteErrorMessage(error), "bad");
+  } finally {
+    state.busyCommand = "";
+    render();
+  }
+}
+
+async function handleCopyPrivateQuoteLink() {
+  try {
+    const latestLink = state.latestQuote?.link || state.privateQuoteResult?.paymentLink;
+
+    if (!latestLink) {
+      throw new Error("Create a private quote first.");
+    }
+
+    await navigator.clipboard.writeText(latestLink);
+    setNotice("Private quote payment link copied to clipboard.", "good");
+  } catch (error) {
+    setNotice(getPrivateQuoteErrorMessage(error), "bad");
+  }
+
+  render();
 }
 
 function hidePrivateBalance() {
@@ -1095,6 +1236,72 @@ async function handleCreateInvoice() {
       payer,
       statusLabel: "Pending Approval",
     });
+  }
+}
+
+async function handleCreatePrivateQuote() {
+  await ensurePrivateQuoteConfig();
+  requirePrivateQuoteRuntime();
+  requirePrivateQuoteChain();
+
+  const values = state.forms.privateQuote;
+  const payer = normalizeAddress(values.payer);
+  const amount = Number(String(values.amount || "").trim());
+
+  if (!payer) {
+    throw new Error("Payer address is invalid.");
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Amount must be greater than zero.");
+  }
+
+  state.busyAction = "create-private-quote";
+  setNotice("Confirm the private quote creation in your wallet.", "warn");
+  render();
+
+  try {
+    const result = await createPrivateQuote({
+      signer: state.runtime.signer,
+      address: state.privateQuoteConfig.address,
+      payer,
+      amount,
+    });
+
+    state.latestQuote = {
+      id: result.id,
+      link: result.paymentLink,
+      payer,
+      amount,
+      txHash: result.txHash,
+      expiresAt: result.expiresAt,
+    };
+    state.privateQuoteResult = result;
+    recordRecentActivity(
+      "Private quote created",
+      "Private Quotes",
+      {
+        hash: result.txHash,
+        blockNumber: result.blockNumber,
+        explorerUrl: getExplorerLink(state.privateQuoteConfig.chainId, result.txHash),
+        identifiers: {
+          quoteId: result.id,
+        },
+      },
+      {
+        amountDisplay: `+${String(values.amount).trim()}`,
+        currency: "QUOTE",
+        direction: "neutral",
+        subtitle: shortAddress(payer),
+      },
+    );
+
+    setNotice("Private quote created. Share the payment route with the payer.", "good");
+  } catch (error) {
+    throw new Error(getPrivateQuoteErrorMessage(error));
+  } finally {
+    state.busyAction = "";
+    render();
   }
 }
 
@@ -1786,6 +1993,7 @@ function renderForms() {
     ["[data-company-button]", "register-company", "Registering...", "Register Company"],
     ["[data-send-button]", "send-payment", "Encrypting...", "Encrypt and Send"],
     ["[data-create-invoice-button]", "create-invoice", "Encrypting...", "Create Invoice"],
+    ["[data-create-private-quote-button]", "create-private-quote", "Creating...", "Create Private Quote"],
     ["[data-read-invoice-button]", "read-invoice", "Loading...", "Load Invoice"],
     ["[data-read-outstanding-button]", "read-outstanding", "Revealing...", "Reveal Outstanding"],
     ["[data-set-policy-button]", "set-policy-rule", "Saving...", "Save Policy Rule"],
@@ -1853,6 +2061,289 @@ function renderCompanySummary() {
       <strong>${escapeHtml(String(company.signers?.length || 0))}</strong>
     </div>
   `;
+}
+
+function renderPaymentIntentWidget() {
+  const container = document.querySelector("[data-payment-intent-widget]");
+  
+  if (!container) {
+    return;
+  }
+
+  // Only show on dashboard view
+  if (state.activeView !== "dashboard") {
+    container.style.display = "none";
+    return;
+  }
+
+  container.style.display = "block";
+
+  // Mount widget if not already mounted
+  if (!container.dataset.mounted) {
+    mountPaymentIntentWidget(container, {
+      permitHash: "",
+      sessionId: "sess_hexapay_ui",
+      deviceFingerprintHash: "dev_hexapay_hash",
+      currency: "USDC",
+      amount: "",
+      executorAddress: import.meta.env.VITE_HEXAPAY_EXECUTOR_CONTRACT || "",
+      onSuccess: (result) => {
+        console.log("Payment executed successfully:", result);
+        // Optionally refresh app state or record activity
+        recordRecentActivity(
+          "Payment executed",
+          "Payments",
+          {
+            hash: result.txHash,
+            blockNumber: result.blockNumber,
+            explorerUrl: `https://sepolia.arbiscan.io/tx/${result.txHash}`,
+            identifiers: {
+              requestId: result.requestId,
+              challengeId: result.challengeId,
+            },
+          },
+          {
+            amountDisplay: "LIVE",
+            currency: "PAYMENT",
+            direction: "neutral",
+            subtitle: `Request ${result.requestId.slice(0, 16)}...`,
+          }
+        );
+        render();
+      },
+      onError: (error) => {
+        console.error("Payment execution failed:", error);
+      },
+    });
+    container.dataset.mounted = "true";
+  }
+}
+
+function renderPrivateQuoteSummary() {
+  const summary = document.querySelector("[data-private-quote-summary]");
+  const helper = document.querySelector("[data-private-quote-helper]");
+  const storeModeField = document.querySelector("[data-private-quote-store-mode]");
+  const switchButton = document.querySelector("[data-private-quote-switch-button]");
+  const resultCard = document.querySelector("[data-private-quote-result]");
+  const receiptCard = document.querySelector("[data-private-quote-receipt]");
+  const auditorReceiptCard = document.querySelector("[data-private-quote-auditor-receipt]");
+  const quoteId = document.querySelector("[data-private-quote-id]");
+  const paymentLink = document.querySelector("[data-private-quote-link]");
+  const openLink = document.querySelector("[data-private-quote-open-link]");
+  const receiptQuoteId = document.querySelector("[data-private-quote-receipt-quote-id]");
+  const receiptMerchant = document.querySelector("[data-private-quote-receipt-merchant]");
+  const receiptPayer = document.querySelector("[data-private-quote-receipt-payer]");
+  const receiptStatus = document.querySelector("[data-private-quote-receipt-status]");
+  const receiptSettledAt = document.querySelector("[data-private-quote-receipt-settled-at]");
+  const receiptTxHash = document.querySelector("[data-private-quote-receipt-tx-hash]");
+  const receiptLink = document.querySelector("[data-private-quote-receipt-link]");
+  const receiptOpenLink = document.querySelector("[data-private-quote-receipt-open-link]");
+  const auditorOpenLink = document.querySelector("[data-private-quote-auditor-open-link]");
+  const auditorReceiptQuoteId = document.querySelector("[data-private-quote-auditor-receipt-quote-id]");
+  const auditorReceiptMerchant = document.querySelector("[data-private-quote-auditor-receipt-merchant]");
+  const auditorReceiptPayer = document.querySelector("[data-private-quote-auditor-receipt-payer]");
+  const auditorReceiptStatus = document.querySelector("[data-private-quote-auditor-receipt-status]");
+  const auditorReceiptSettledAt = document.querySelector("[data-private-quote-auditor-receipt-settled-at]");
+  const auditorReceiptTxHash = document.querySelector("[data-private-quote-auditor-receipt-tx-hash]");
+  const auditorReceiptVisibility = document.querySelector("[data-private-quote-auditor-receipt-visibility]");
+
+  if (!summary || !helper || !switchButton || !resultCard || !receiptCard) {
+    return;
+  }
+
+  const config = state.privateQuoteConfig;
+  const latestQuote = state.latestQuote || state.privateQuoteResult;
+  const latestReceipt = state.latestReceipt;
+  const latestAuditorReceipt = state.latestAuditorReceipt;
+  const latestQuoteId = latestQuote?.id || latestReceipt?.quoteId || "";
+  const walletChain = state.runtime.connected
+    ? getChainMetadata(state.runtime.chainId).shortLabel
+    : "Wallet offline";
+  const moduleChain = config ? getChainMetadata(config.chainId).shortLabel : "Loading";
+  const storeModeLabel = getPrivateQuoteStoreModeLabel(receiptStoreMode);
+
+  if (!config) {
+    helper.textContent = "Loading private quote module config...";
+  } else if (!state.runtime.connected) {
+    helper.textContent = `Connect a wallet first. Private quote module is configured on ${moduleChain}.`;
+  } else if (state.runtime.chainId !== config.chainId) {
+    helper.textContent = `Wallet is on ${walletChain}. Switch to ${moduleChain} to create a private quote.`;
+  } else {
+    helper.textContent = `Private quote module ready on ${moduleChain}. Share the generated /pay.html route with the payer.`;
+  }
+
+  summary.innerHTML = `
+    <div class="summary-row">
+      <span>Module chain</span>
+      <strong>${escapeHtml(moduleChain)}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Receipt store</span>
+      <strong>${escapeHtml(storeModeLabel)}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Contract</span>
+      <strong>${escapeHtml(config ? shortAddress(config.address) : "Loading...")}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Wallet</span>
+      <strong>${escapeHtml(state.runtime.connected ? `${shortAddress(state.runtime.account)} · ${walletChain}` : "Connect wallet")}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Latest quote</span>
+      <strong>${escapeHtml(latestQuoteId ? shortAddress(latestQuoteId, 8, 8) : "No quote created this session")}</strong>
+    </div>
+  `;
+
+  switchButton.hidden = !config;
+  switchButton.disabled =
+    state.busyAction !== "" ||
+    state.busyCommand === "connect-wallet" ||
+    state.busyCommand === "switch-chain" ||
+    state.busyCommand === "disconnect-wallet";
+  switchButton.textContent =
+    state.busyCommand === "switch-private-quote-chain"
+      ? "Switching..."
+      : `Switch to ${moduleChain}`;
+
+  if (storeModeField) {
+    storeModeField.value = receiptStoreMode;
+    storeModeField.disabled = state.busyAction !== "" || state.busyCommand !== "";
+  }
+
+  resultCard.hidden = !latestQuote;
+
+  if (latestQuote) {
+    quoteId.textContent = latestQuote.id;
+    paymentLink.textContent = latestQuote.link;
+    paymentLink.href = latestQuote.link;
+    openLink.href = latestQuote.link;
+  }
+
+  receiptCard.hidden = !latestReceipt;
+  if (auditorReceiptCard) {
+    auditorReceiptCard.hidden = !latestAuditorReceipt;
+  }
+
+  if (!latestReceipt) {
+    return;
+  }
+
+  receiptQuoteId.textContent = latestReceipt.quoteId;
+  receiptMerchant.textContent = latestReceipt.merchant || "Not available";
+  receiptPayer.textContent = latestReceipt.payer || "Not available";
+  receiptStatus.textContent = latestReceipt.status || "Settled";
+  receiptSettledAt.textContent = formatPrivateQuoteReceiptTime(latestReceipt.settledAt);
+  receiptTxHash.textContent = latestReceipt.txHash || "Not available";
+
+  const receiptViewHref =
+    latestReceipt.paymentLink ||
+    latestQuote?.link ||
+    (latestReceipt.quoteId
+      ? `${window.location.origin}/pay.html?id=${encodeURIComponent(latestReceipt.quoteId)}`
+      : `${window.location.origin}/pay.html`);
+
+  if (receiptLink) {
+    receiptLink.textContent = receiptViewHref;
+    receiptLink.href = receiptViewHref;
+  }
+
+  if (receiptOpenLink) {
+    receiptOpenLink.href = receiptViewHref;
+  }
+
+  if (auditorOpenLink) {
+    const auditorViewHref = latestReceipt?.quoteId
+      ? appendPrivateQuoteStoreMode(
+          `${window.location.origin}/audit.html?id=${encodeURIComponent(latestReceipt.quoteId)}`,
+          receiptStoreMode,
+        ).toString()
+      : appendPrivateQuoteStoreMode(`${window.location.origin}/audit.html`, receiptStoreMode).toString();
+
+    auditorOpenLink.href = auditorViewHref;
+  }
+
+  if (!auditorReceiptCard) {
+    return;
+  }
+
+  if (!latestAuditorReceipt) {
+    return;
+  }
+
+  auditorReceiptQuoteId.textContent = latestAuditorReceipt.quoteId;
+  auditorReceiptMerchant.textContent = latestAuditorReceipt.merchant || "Not available";
+  auditorReceiptPayer.textContent = latestAuditorReceipt.payer || "Not available";
+  auditorReceiptStatus.textContent = latestAuditorReceipt.status || "Settled";
+  auditorReceiptSettledAt.textContent = formatPrivateQuoteReceiptTime(latestAuditorReceipt.settledAt);
+  auditorReceiptTxHash.textContent = latestAuditorReceipt.txHash || "Not available";
+  auditorReceiptVisibility.textContent = latestAuditorReceipt.visibility || "limited";
+}
+
+async function syncLatestPrivateQuoteReceipts() {
+  try {
+    const receipts = await receiptStore.listReceipts(ReceiptRoles.MERCHANT);
+    const latestReceiptSummary = receipts[0] || null;
+    state.latestReceipt = latestReceiptSummary;
+
+    if (latestReceiptSummary?.quoteId) {
+      try {
+        const latestReceiptDetail = await receiptStore.getReceiptByQuoteId(
+          latestReceiptSummary.quoteId,
+          ReceiptRoles.MERCHANT,
+        );
+
+        if (latestReceiptDetail) {
+          state.latestReceipt = {
+            ...latestReceiptSummary,
+            ...latestReceiptDetail,
+          };
+        }
+      } catch (error) {
+        if (
+          !isReceiptAccessDeniedError(error, [
+            "participant-context-required",
+            "viewer-participant-mismatch",
+            "receipt-participant-missing",
+            "receipt-grant-invalid",
+            "receipt-grant-proof-required",
+            "receipt-challenge-invalid",
+            "receipt-challenge-expired",
+            "receipt-challenge-consumed",
+            "receipt-challenge-unrecognized",
+            "receipt-challenge-signature-invalid",
+            "receipt-challenge-role-mismatch",
+            "receipt-challenge-context-mismatch",
+          ])
+        ) {
+          throw error;
+        }
+      }
+    }
+
+    state.latestAuditorReceipt = state.latestReceipt?.quoteId
+      ? await receiptStore.getReceiptByQuoteId(state.latestReceipt.quoteId, ReceiptRoles.AUDITOR)
+      : null;
+  } finally {
+    state.allowReceiptGrantSignature = false;
+  }
+}
+
+async function syncReceiptStoreMode(mode, { syncUrl = true } = {}) {
+  receiptStoreMode = setPrivateQuoteStoreMode(mode, { syncUrl });
+  receiptStore = createReceiptStore(receiptStoreMode, {
+    accessContextResolver: ({ role, quoteId, action }) =>
+      createReceiptAccessContext({
+        role,
+        quoteId,
+        action,
+        runtime: state.runtime,
+        fhenix: state.fhenix,
+        allowGrantSignature: state.allowReceiptGrantSignature,
+      }),
+  });
+  receiptStoreChangeKey = getReceiptStoreChangeKey(receiptStoreMode);
+  await syncLatestPrivateQuoteReceipts();
 }
 
 function renderInvoiceSummary() {
@@ -2291,6 +2782,8 @@ function render() {
   renderBalanceCard();
   renderForms();
   renderCompanySummary();
+  renderPaymentIntentWidget();
+  renderPrivateQuoteSummary();
   renderInvoiceSummary();
   renderPolicySummary();
   renderEscrowSummary();
@@ -2316,7 +2809,7 @@ async function handleCommand(command) {
   if (command === "disconnect-wallet") {
     state.busyCommand = "disconnect-wallet";
     render();
-    disconnectWalletSession();
+    await disconnectWalletSession();
     state.busyCommand = "";
     render();
     return;
@@ -2342,6 +2835,16 @@ async function handleCommand(command) {
     return;
   }
 
+  if (command === "switch-private-quote-chain") {
+    await handleSwitchPrivateQuoteChain();
+    return;
+  }
+
+  if (command === "copy-private-quote-link") {
+    await handleCopyPrivateQuoteLink();
+    return;
+  }
+
   if (command === "clear-activity") {
     clearRecentActivity();
     setNotice("Recent activity log cleared for this browser.", "muted");
@@ -2363,6 +2866,11 @@ async function handleAction(action) {
 
     if (action === "create-invoice") {
       await handleCreateInvoice();
+      return;
+    }
+
+    if (action === "create-private-quote") {
+      await handleCreatePrivateQuote();
       return;
     }
 
@@ -2431,7 +2939,7 @@ async function handleAction(action) {
       return;
     }
   } catch (error) {
-    setNotice(formatTransactionError(error), "bad");
+    setNotice(error?.message || formatTransactionError(error), "bad");
     render();
   }
 }
@@ -2449,6 +2957,17 @@ function bindEvents() {
       ...(state.forms[group] || {}),
       [key]: field.value,
     };
+  });
+
+  document.addEventListener("change", async (event) => {
+    const storeModeField = event.target.closest("[data-private-quote-store-mode]");
+
+    if (!storeModeField) {
+      return;
+    }
+
+    await syncReceiptStoreMode(storeModeField.value);
+    render();
   });
 
   document.addEventListener("click", async (event) => {
@@ -2503,13 +3022,30 @@ function bindEvents() {
     setActiveView(window.location.hash, { updateHash: false, scrollTop: false });
     render();
   });
+
+  window.addEventListener("storage", async (event) => {
+    if (event.key === PRIVATE_QUOTE_STORE_MODE_STORAGE_KEY) {
+      await syncReceiptStoreMode(getPrivateQuoteStoreMode(), { syncUrl: false });
+      render();
+      return;
+    }
+
+    if (!receiptStoreChangeKey || event.key !== receiptStoreChangeKey) {
+      return;
+    }
+
+    await syncLatestPrivateQuoteReceipts();
+    render();
+  });
 }
 
 async function bootstrap() {
   state.recentActivity = loadRecentActivity();
+  await syncReceiptStoreMode(getPrivateQuoteStoreMode(), { syncUrl: false });
   render();
   bindEvents();
   await bootstrapManifest();
+  await syncPrivateQuoteConfig();
   await refreshAppState({ silent: true });
   render();
 }

@@ -32,6 +32,7 @@ HexaPay now treats this as the default settlement rail for `arb-sepolia` deploys
 - `index.html`: HexaPay home and product overview
 - `app.html`: product-facing app for day-to-day private finance flows
 - `hexapay.html`: deeper operations workspace and contract console
+- `payment-intent.html`: focused payment rail demo surface for Arbitrum Sepolia
 
 ## Live Contract Addresses
 
@@ -47,10 +48,31 @@ Current deployment target: `Arbitrum Sepolia`
 - Analytics Module: [`0x66BA4df1eaAdcd4c32B1843BF283eD89A006a9d7`](https://sepolia.arbiscan.io/address/0x66BA4df1eaAdcd4c32B1843BF283eD89A006a9d7)
 - Default Testnet Settlement Token: [`0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d`](https://sepolia.arbiscan.io/address/0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d)
 
+## Payment Rail
+
+The currently verified live payment rail on Arbitrum Sepolia uses:
+
+- `HexaPayUSDCExecutor`: [`0xD3cBE1F9A84E96DF340bef7b9D2B7C466Eb29d55`](https://sepolia.arbiscan.io/address/0xD3cBE1F9A84E96DF340bef7b9D2B7C466Eb29d55)
+- Settlement token: [`0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d`](https://sepolia.arbiscan.io/address/0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d)
+
+Latest live verification in this repo:
+
+- `npm run test:payment-flow` completed successfully on Arbitrum Sepolia
+- Example tx: [`0xe71dd5412c783db11fa6f45f4824db208bb374f62adb53dccd738559536044ab`](https://sepolia.arbiscan.io/tx/0xe71dd5412c783db11fa6f45f4824db208bb374f62adb53dccd738559536044ab)
+- Example block: `261115751`
+
+Important runtime notes:
+
+- Browser UI at `app.html` or `payment-intent.html` always uses the wallet currently connected in MetaMask or Rabby.
+- `TEST_PAYER_PRIVATE_KEY` is only used by the CLI runner `npm run test:payment-flow`.
+- EIP-712 signing must use the `domain` returned by `POST /api/payments/challenges`.
+- For wallet stability on Arbitrum Sepolia, prefer `https://sepolia-rollup.arbitrum.io/rpc`.
+
 ## Repository Layout
 
 ```text
 Fhenix Buildathon/
+├── docs/                   # Roadmaps, status notes, and private-quote documentation
 ├── contracts/              # HexaPay core, workflow, escrow, compliance, analytics, vault, factory
 ├── scripts/                # Deployment, wallet setup, wrap bootstrap, and interaction helpers
 ├── src/                    # App, workspace, client runtime, and shared styling
@@ -83,6 +105,10 @@ Local entry points:
 npm run dev
 npm run build
 npm run preview
+npm run test:payment-flow
+npm run verify:private-quotes
+npm run demo:private-quotes:paths
+npm run demo:private-quotes:challenges
 
 # Contracts
 npm run compile
@@ -111,6 +137,8 @@ HexaPay is structured as a modular confidential finance suite:
 
 More detail is documented in [README_CONTRACTS.md](./README_CONTRACTS.md).
 
+Operational, guide, and roadmap-heavy docs are grouped under [docs/README.md](./docs/README.md).
+
 ## Roadmap
 
 The active roadmap is tracked in [ROADMAP_HEXAPAY.md](./ROADMAP_HEXAPAY.md). The main direction is to keep HexaPay as one product while scaling through focused modules for workflow, escrow, compliance, and analytics.
@@ -119,5 +147,15 @@ The active roadmap is tracked in [ROADMAP_HEXAPAY.md](./ROADMAP_HEXAPAY.md). The
 
 - Copy `.env.example` into `.env` before running deployment or network-specific scripts.
 - `.env.example` now defaults `SETTLEMENT_TOKEN_ADDRESS` to Circle USDC on Arbitrum Sepolia testnet.
+- Mock receipt canonical storage can be switched with `MOCK_RECEIPT_REGISTRY_MODE=memory|file|http`.
+- File-backed mock receipt canonical storage defaults to `.hexapay/mock-receipt-registry.json` and can be overridden with `MOCK_RECEIPT_REGISTRY_PATH`.
+- HTTP-backed mock receipt canonical storage expects `MOCK_RECEIPT_REGISTRY_BASE_URL` and optionally `MOCK_RECEIPT_REGISTRY_STORE_ID` (default `registry`).
+- Mock receipt challenge storage can be switched with `MOCK_RECEIPT_CHALLENGE_REGISTRY_MODE=memory|file|http`.
+- File-backed mock receipt challenge storage defaults to `.hexapay/mock-receipt-challenge-registry.json` and can be overridden with `MOCK_RECEIPT_CHALLENGE_REGISTRY_PATH`.
+- HTTP-backed mock receipt challenge storage expects `MOCK_RECEIPT_CHALLENGE_REGISTRY_BASE_URL` and optionally `MOCK_RECEIPT_CHALLENGE_REGISTRY_STORE_ID` (default `challenges`).
+- Both mock receipt registries now share a JSON state-store seam, so file persistence can be replaced by a custom backend/cache store without changing the API contract.
+- The shared JSON state-store seam now includes revision metadata and optimistic conflict handling for safer multi-writer migrations.
+- The mock receipt service and Vite mock API are now async-compatible on this persistence seam, which is the last plumbing step before swapping file storage for an actual HTTP/KV/shared backend adapter.
+- The shared mock receipt registries can now point at a remote HTTP state-store control plane that exposes `/api/receipts/_state/:storeId`, which keeps the frontend contract unchanged while backend persistence is swapped underneath.
 - `deployment.json` is intentionally ignored from git in the current setup.
 - The app currently targets Arbitrum Sepolia for the live product flow and Fhenix tooling for encrypted operations.

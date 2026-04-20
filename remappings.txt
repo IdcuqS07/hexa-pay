@@ -1,0 +1,4 @@
+forge-std/=lib/forge-std/src/
+@fhenixprotocol/cofhe-contracts/=node_modules/@fhenixprotocol/cofhe-contracts/
+@cofhe/foundry-plugin/=node_modules/@cofhe/foundry-plugin/
+@cofhe/mock-contracts/=node_modules/@cofhe/mock-contracts/

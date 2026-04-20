@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0e14">
+  <title>HexaPay - Pay Private Quote</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/app/styles.css">
+</head>
+<body>
+  <main class="main-content pay-main">
+    <div class="pay-shell">
+      <section class="app-toolbar">
+        <div class="toolbar-copy">
+          <a class="text-btn" data-pay-back-link href="/app.html#private-quotes">Back to Private Quotes</a>
+          <span class="toolbar-kicker">Public Payment Route</span>
+          <h1>Pay private quote</h1>
+          <p class="toolbar-description" data-pay-notice>
+            Load the quote, connect the payer wallet, and settle without exposing the amount in public UI.
+          </p>
+          <div class="toolbar-meta">
+            <span class="status-chip" data-pay-chain>Loading network</span>
+            <span class="status-chip" data-pay-module>Quote module</span>
+            <span class="status-chip" data-pay-status>Waiting</span>
+          </div>
+        </div>
+        <div class="toolbar-actions">
+          <button class="toolbar-btn primary" type="button" data-command="connect-wallet">
+            Connect Wallet
+          </button>
+          <button class="toolbar-btn" type="button" data-command="switch-chain" hidden>
+            Switch Network
+          </button>
+          <button class="toolbar-btn" type="button" data-command="refresh-quote">
+            Refresh Quote
+          </button>
+        </div>
+      </section>
+
+      <section class="operation-card panel-shell">
+        <div class="operation-head">
+          <div>
+            <span class="operation-kicker">Private Quote</span>
+            <h2>Payment details</h2>
+          </div>
+          <span class="operation-pill">Payer</span>
+        </div>
+        <p class="operation-copy">
+          This page reuses the HexaPay wallet flow and theme, but only exposes the minimum quote metadata needed to settle the payment.
+        </p>
+        <div class="helper-line" data-pay-route>
+          Reading quote route...
+        </div>
+        <div class="summary-list" data-pay-summary>
+          <div class="summary-row">
+            <span>Status</span>
+            <strong>Loading quote</strong>
+          </div>
+          <div class="summary-row">
+            <span>Quote ID</span>
+            <strong>Waiting</strong>
+          </div>
+        </div>
+        <div class="operation-actions" data-pay-actions>
+          <button class="toolbar-btn primary" type="button" data-command="pay-quote">
+            Pay Now
+          </button>
+        </div>
+
+        <div class="pq-notice" data-pay-quote-notice hidden>
+          Quote is not payable.
+        </div>
+
+        <div class="pq-receipt" data-pay-receipt hidden>
+          <div class="pq-receipt-title">Payment Receipt</div>
+
+          <div class="pq-field">
+            <div class="pq-label">Quote ID</div>
+            <div class="pq-value mono" data-pay-receipt-quote-id>Pending</div>
+          </div>
+
+          <div class="pq-field">
+            <div class="pq-label">Merchant</div>
+            <div class="pq-value mono" data-pay-receipt-merchant>Pending</div>
+          </div>
+
+          <div class="pq-field">
+            <div class="pq-label">Payer</div>
+            <div class="pq-value mono" data-pay-receipt-payer>Pending</div>
+          </div>
+
+          <div class="pq-field">
+            <div class="pq-label">Status</div>
+            <div class="pq-value" data-pay-receipt-status>Settled</div>
+          </div>
+
+          <div class="pq-field">
+            <div class="pq-label">Settled At</div>
+            <div class="pq-value" data-pay-receipt-settled-at>Pending</div>
+          </div>
+
+          <div class="pq-field">
+            <div class="pq-label">Transaction Hash</div>
+            <div class="pq-value mono" data-pay-receipt-tx-hash>Pending</div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script type="module" src="/app/pay.js"></script>
+</body>
+</html>

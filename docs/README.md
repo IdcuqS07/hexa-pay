@@ -1,0 +1,47 @@
+# Documentation Index
+
+Repo ini sekarang memakai folder `docs/` untuk menampung dokumen yang sifatnya roadmap, status, acceptance, dan catatan implementasi agar root repo tetap lebih tenang.
+
+## Status
+
+- [DEPLOYMENT_SUCCESS.md](./status/DEPLOYMENT_SUCCESS.md)
+- [DEPLOYMENT_SUMMARY.md](./status/DEPLOYMENT_SUMMARY.md)
+- [FINAL_STATUS.md](./status/FINAL_STATUS.md)
+- [GAS_FIX.md](./status/GAS_FIX.md)
+- [INTEGRATION_STATUS.md](./status/INTEGRATION_STATUS.md)
+- [INTEGRATION_SUMMARY.md](./status/INTEGRATION_SUMMARY.md)
+- [MILESTONE_COMPLETION_SUMMARY.md](./status/MILESTONE_COMPLETION_SUMMARY.md)
+
+## Guides
+
+- [BOOTSTRAP_GUIDE.md](./guides/BOOTSTRAP_GUIDE.md)
+- [COFHE_MIGRATION.md](./guides/COFHE_MIGRATION.md)
+- [DEPLOY_NOW.md](./guides/DEPLOY_NOW.md)
+- [DEPLOYMENT_GUIDE.md](./guides/DEPLOYMENT_GUIDE.md)
+- [E2E_INTEGRATION.md](./guides/E2E_INTEGRATION.md)
+- [E2E_TEST_GUIDE.md](./guides/E2E_TEST_GUIDE.md)
+- [EXECUTION_ROADMAP.md](./guides/EXECUTION_ROADMAP.md)
+- [FAUCET_GUIDE.md](./guides/FAUCET_GUIDE.md)
+- [FOUNDRY_INTEGRATION.md](./guides/FOUNDRY_INTEGRATION.md)
+- [FOUNDRY_SETUP.md](./guides/FOUNDRY_SETUP.md)
+- [PAYMENT_INTENT_QUICKSTART.md](./guides/PAYMENT_INTENT_QUICKSTART.md)
+- [QUICKSTART.md](./guides/QUICKSTART.md)
+- [SEPOLIA_DEPLOYMENT_GUIDE.md](./guides/SEPOLIA_DEPLOYMENT_GUIDE.md)
+- [TESTING_QUICK_REF.md](./guides/TESTING_QUICK_REF.md)
+- [WALLET_SETUP.md](./guides/WALLET_SETUP.md)
+
+## Private Quotes
+
+- [PRIVATE_QUOTES_BOOTSTRAP_ACCEPTANCE.md](./private-quotes/PRIVATE_QUOTES_BOOTSTRAP_ACCEPTANCE.md)
+- [PRIVATE_QUOTES_COMPLETE.md](./private-quotes/PRIVATE_QUOTES_COMPLETE.md)
+- [PRIVATE_QUOTES_NEXT_PHASE_ROADMAP.md](./private-quotes/PRIVATE_QUOTES_NEXT_PHASE_ROADMAP.md)
+- [PRIVATE_QUOTES_SUMMARY.md](./private-quotes/PRIVATE_QUOTES_SUMMARY.md)
+
+## Specs
+
+- [SPEC_HEXAPAY_ANALYTICS.md](./specs/SPEC_HEXAPAY_ANALYTICS.md)
+- [SPEC_HEXAPAY_COMPLIANCE.md](./specs/SPEC_HEXAPAY_COMPLIANCE.md)
+- [SPEC_HEXAPAY_ESCROW.md](./specs/SPEC_HEXAPAY_ESCROW.md)
+- [SPEC_HEXAPAY_INVOICE.md](./specs/SPEC_HEXAPAY_INVOICE.md)
+- [SPEC_HEXAPAY_POLICY.md](./specs/SPEC_HEXAPAY_POLICY.md)
+- [SPEC_HEXAPAY_REINEIRA_ADOPTION.md](./specs/SPEC_HEXAPAY_REINEIRA_ADOPTION.md)

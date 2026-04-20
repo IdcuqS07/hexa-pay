@@ -1,0 +1,268 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import "forge-std/Test.sol";
+import {PrivateMerchantQuote} from "../src/PrivateMerchantQuote.sol";
+import {MockCreditAdapter} from "../src/MockCreditAdapter.sol";
+import {FHE, euint64, ebool} from "@fhenixprotocol/cofhe-contracts/FHE.sol";
+
+/// @notice Foundry test for PrivateMerchantQuote using CoFHE patterns
+/// @dev Uses simplified FHE mocking for local testing
+contract PrivateMerchantQuoteFoundryTest is Test {
+    PrivateMerchantQuote internal quote;
+    MockCreditAdapter internal credit;
+
+    address internal merchant = address(0x1001);
+    address internal payer = address(0x1002);
+    address internal other = address(0x1003);
+
+    bytes32 internal quoteId = keccak256("QUOTE_1");
+    uint64 internal expiry;
+
+    function setUp() public {
+        credit = new MockCreditAdapter();
+        quote = new PrivateMerchantQuote(address(credit));
+
+        expiry = uint64(block.timestamp + 1 days);
+        
+        // Authorize quote contract in credit adapter
+        credit.authorizeCaller(address(quote));
+    }
+
+    // -------------------------------------------------
+    // Helpers
+    // -------------------------------------------------
+
+    function _mockEncryptedAmount(uint64 value) internal pure returns (euint64) {
+        return FHE.asEuint64(value);
+    }
+
+    function _createQuote() internal {
+        euint64 amountCt = _mockEncryptedAmount(100);
+
+        vm.prank(merchant);
+        quote.createQuote(quoteId, payer, amountCt, expiry);
+    }
+
+    function _seedCredit(address user, uint64 value) internal {
+        euint64 creditCt = _mockEncryptedAmount(value);
+        credit.seedCredit(user, creditCt);
+    }
+
+    // -------------------------------------------------
+    // Core Happy Path Tests (Minimum Target)
+    // -------------------------------------------------
+
+    function test_CreateQuote_Success() public {
+        _createQuote();
+
+        (
+            address storedMerchant,
+            address storedPayer,
+            uint64 storedExpiry,
+            uint8 status,
+            bool accessGranted
+        ) = quote.getQuote(quoteId);
+
+        assertEq(storedMerchant, merchant);
+        assertEq(storedPayer, payer);
+        assertEq(storedExpiry, expiry);
+        assertEq(status, 1); // Pending
+        assertEq(accessGranted, false);
+    }
+
+    function test_GrantAccess_Success() public {
+        _createQuote();
+
+        vm.prank(merchant);
+        quote.grantAccess(quoteId, payer);
+
+        (, , , , bool accessGranted) = quote.getQuote(quoteId);
+        assertTrue(accessGranted);
+    }
+
+    function test_SettleQuote_Success() public {
+        _createQuote();
+        _seedCredit(payer, 500);
+
+        vm.prank(merchant);
+        quote.grantAccess(quoteId, payer);
+
+        vm.prank(payer);
+        quote.settleQuote(quoteId, false);
+
+        (, , , uint8 status, ) = quote.getQuote(quoteId);
+        assertEq(status, 2); // Settled
+    }
+
+    function test_SettleQuote_RevertWhenWrongPayer() public {
+        _createQuote();
+        _seedCredit(other, 500);
+
+        vm.prank(merchant);
+        quote.grantAccess(quoteId, payer);
+
+        vm.prank(other);
+        vm.expectRevert(PrivateMerchantQuote.NotAuthorized.selector);
+        quote.settleQuote(quoteId, false);
+    }
+
+    // -------------------------------------------------
+    // Additional Happy Path Tests
+    // -------------------------------------------------
+
+    function test_SettleQuote_Success_WithSkipPreview() public {
+        _createQuote();
+        _seedCredit(payer, 500);
+
+        vm.prank(payer);
+        quote.settleQuote(quoteId, true);
+
+        (, , , uint8 status, ) = quote.getQuote(quoteId);
+        assertEq(status, 2); // Settled
+    }
+
+    function test_CancelExpired_Success() public {
+        _createQuote();
+
+        vm.warp(block.timestamp + 2 days);
+
+        vm.prank(merchant);
+        quote.cancelExpired(quoteId);
+
+        (, , , uint8 status, ) = quote.getQuote(quoteId);
+        assertEq(status, 3); // Cancelled
+    }
+
+    function test_CancelQuote_Success() public {
+        _createQuote();
+
+        vm.prank(merchant);
+        quote.cancelQuote(quoteId);
+
+        (, , , uint8 status, ) = quote.getQuote(quoteId);
+        assertEq(status, 3); // Cancelled
+    }
+
+    // -------------------------------------------------
+    // Negative Cases
+    // -------------------------------------------------
+
+    function test_CreateQuote_RevertOnDuplicateId() public {
+        _createQuote();
+
+        euint64 amountCt = _mockEncryptedAmount(200);
+
+        vm.prank(merchant);
+        vm.expectRevert(PrivateMerchantQuote.AlreadyExists.selector);
+        quote.createQuote(quoteId, payer, amountCt, expiry);
+    }
+
+    function test_CreateQuote_RevertOnZeroPayer() public {
+        euint64 amountCt = _mockEncryptedAmount(100);
+
+        vm.prank(merchant);
+        vm.expectRevert(PrivateMerchantQuote.InvalidPayer.selector);
+        quote.createQuote(quoteId, address(0), amountCt, expiry);
+    }
+
+    function test_GrantAccess_RevertWhenNotMerchant() public {
+        _createQuote();
+
+        vm.prank(other);
+        vm.expectRevert(PrivateMerchantQuote.NotAuthorized.selector);
+        quote.grantAccess(quoteId, payer);
+    }
+
+    function test_SettleQuote_RevertWhenExpired() public {
+        _createQuote();
+        _seedCredit(payer, 500);
+
+        vm.warp(block.timestamp + 2 days);
+
+        vm.prank(payer);
+        vm.expectRevert(PrivateMerchantQuote.Expired.selector);
+        quote.settleQuote(quoteId, true);
+    }
+
+    function test_SettleQuote_RevertWhenNoAccessAndNoSkipPreview() public {
+        _createQuote();
+        _seedCredit(payer, 500);
+
+        vm.prank(payer);
+        vm.expectRevert(PrivateMerchantQuote.NotAuthorized.selector);
+        quote.settleQuote(quoteId, false);
+    }
+
+    function test_CancelExpired_RevertWhenNotExpired() public {
+        _createQuote();
+
+        vm.prank(merchant);
+        vm.expectRevert(PrivateMerchantQuote.InvalidState.selector);
+        quote.cancelExpired(quoteId);
+    }
+
+    function test_CancelExpired_RevertWhenNotMerchant() public {
+        _createQuote();
+
+        vm.warp(block.timestamp + 2 days);
+
+        vm.prank(other);
+        vm.expectRevert(PrivateMerchantQuote.NotAuthorized.selector);
+        quote.cancelExpired(quoteId);
+    }
+
+    // -------------------------------------------------
+    // Event Tests
+    // -------------------------------------------------
+
+    function test_CreateQuote_EmitsEvent() public {
+        euint64 amountCt = _mockEncryptedAmount(100);
+
+        vm.expectEmit(true, true, true, false);
+        emit PrivateMerchantQuote.QuoteCreated(quoteId, merchant, payer);
+
+        vm.prank(merchant);
+        quote.createQuote(quoteId, payer, amountCt, expiry);
+    }
+
+    function test_GrantAccess_EmitsEvent() public {
+        _createQuote();
+
+        vm.expectEmit(true, true, false, false);
+        emit PrivateMerchantQuote.AccessGranted(quoteId, payer);
+
+        vm.prank(merchant);
+        quote.grantAccess(quoteId, payer);
+    }
+
+    function test_SettleQuote_EmitsEvent() public {
+        _createQuote();
+        _seedCredit(payer, 500);
+
+        vm.expectEmit(true, true, false, false);
+        emit PrivateMerchantQuote.QuoteSettled(quoteId, payer);
+
+        vm.prank(payer);
+        quote.settleQuote(quoteId, true);
+    }
+
+    // -------------------------------------------------
+    // Credit Adapter Integration Tests
+    // -------------------------------------------------
+
+    function test_CreditAdapter_Authorization() public {
+        assertTrue(credit.authorizedCallers(address(quote)));
+    }
+
+    function test_SettleQuote_ConsumesCredit() public {
+        _createQuote();
+        _seedCredit(payer, 500);
+
+        vm.prank(payer);
+        vm.expectEmit(true, false, false, false);
+        emit MockCreditAdapter.CreditConsumed(payer);
+        
+        quote.settleQuote(quoteId, true);
+    }
+}

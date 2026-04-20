@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0e14">
+  <title>HexaPay - Auditor Receipt View</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/app/styles.css">
+</head>
+<body>
+  <main class="main-content pay-main">
+    <div class="pay-shell">
+      <section class="app-toolbar">
+        <div class="toolbar-copy">
+          <a class="text-btn" data-audit-back-link href="/app.html#private-quotes">Back to Private Quotes</a>
+          <span class="toolbar-kicker">Selective Disclosure</span>
+          <h1>Auditor receipt view</h1>
+          <p class="toolbar-description" data-audit-notice>
+            Load a limited receipt projection for audit and compliance review.
+          </p>
+          <div class="toolbar-meta">
+            <span class="status-chip" data-audit-store-mode-chip>Store Mode: Loading</span>
+            <span class="status-chip" data-audit-visibility-chip>Visibility: Limited</span>
+            <span class="status-chip" data-audit-phase-chip>Phase: Bootstrap</span>
+            <span class="status-chip" data-audit-status-chip>Waiting</span>
+          </div>
+        </div>
+        <div class="toolbar-actions">
+          <button class="toolbar-btn" type="button" data-command="refresh-audit-receipt">
+            Refresh Receipt
+          </button>
+        </div>
+      </section>
+
+      <section class="operation-card panel-shell">
+        <div class="operation-head">
+          <div>
+            <span class="operation-kicker">Auditor</span>
+            <h2>Limited receipt projection</h2>
+          </div>
+          <span class="operation-pill">Limited</span>
+        </div>
+        <p class="operation-copy">
+          This page intentionally shows only the limited projection defined by the receipt policy layer.
+        </p>
+        <div class="helper-line" data-audit-route>
+          Reading auditor receipt route...
+        </div>
+        <label class="field pq-store-mode-field">
+          <span>Receipt Store Mode</span>
+          <select data-audit-store-mode>
+            <option value="local">Local</option>
+            <option value="mock-registry">Mock Registry</option>
+            <option value="mock-api">Mock API</option>
+          </select>
+        </label>
+        <div class="summary-list" data-audit-summary>
+          <div class="summary-row">
+            <span>Status</span>
+            <strong>Loading receipt</strong>
+          </div>
+          <div class="summary-row">
+            <span>Quote ID</span>
+            <strong>Waiting</strong>
+          </div>
+        </div>
+
+        <div class="pq-notice" data-audit-page-notice hidden>
+          Auditor receipt is not available.
+        </div>
+
+        <div class="pq-receipt" data-audit-receipt hidden>
+          <div class="pq-receipt-title">Auditor Receipt View</div>
+
+          <div class="pq-field">
+            <div class="pq-label">Quote ID</div>
+            <div class="pq-value mono" data-audit-receipt-quote-id>Pending</div>
+          </div>
+
+          <div class="pq-field">
+            <div class="pq-label">Merchant</div>
+            <div class="pq-value mono" data-audit-receipt-merchant>Pending</div>
+          </div>
+
+          <div class="pq-field">
+            <div class="pq-label">Payer</div>
+            <div class="pq-value mono" data-audit-receipt-payer>Pending</div>
+          </div>
+
+          <div class="pq-field">
+            <div class="pq-label">Status</div>
+            <div class="pq-value" data-audit-receipt-status>Settled</div>
+          </div>
+
+          <div class="pq-field">
+            <div class="pq-label">Settled At</div>
+            <div class="pq-value" data-audit-receipt-settled-at>Pending</div>
+          </div>
+
+          <div class="pq-field">
+            <div class="pq-label">Transaction Hash</div>
+            <div class="pq-value mono" data-audit-receipt-tx-hash>Pending</div>
+          </div>
+
+          <div class="pq-field">
+            <div class="pq-label">Visibility</div>
+            <div class="pq-value" data-audit-receipt-visibility>limited</div>
+          </div>
+
+          <div class="pq-field">
+            <div class="pq-label">Store Mode</div>
+            <div class="pq-value" data-audit-receipt-store-mode>Local</div>
+          </div>
+
+          <div class="pq-field">
+            <div class="pq-label">Phase</div>
+            <div class="pq-value" data-audit-receipt-phase>Bootstrap</div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script type="module" src="/app/audit.js"></script>
+</body>
+</html>
