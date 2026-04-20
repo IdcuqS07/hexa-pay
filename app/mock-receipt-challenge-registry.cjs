@@ -5,6 +5,7 @@ const {
   isJsonStateStore,
 } = require("./mock-receipt-state-store.cjs");
 const { HttpJsonStateStore } = require("./mock-receipt-http-state-store.cjs");
+const { createLazySharedInstance } = require('./lazy-shared-instance.cjs');
 const { createRedisReceiptGrantChallengeRegistry } = require('./mock-receipt-redis-challenge-registry.cjs');
 
 const RECEIPT_GRANT_CHALLENGE_REGISTRY_VERSION = 1;
@@ -826,7 +827,10 @@ function createReceiptGrantChallengeRegistryAdapter(options = {}) {
   return new FileReceiptGrantChallengeRegistry(options);
 }
 
-const sharedMockReceiptGrantChallengeRegistry = createReceiptGrantChallengeRegistryAdapter();
+const {
+  getInstance: getSharedMockReceiptGrantChallengeRegistry,
+  shared: sharedMockReceiptGrantChallengeRegistry,
+} = createLazySharedInstance(() => createReceiptGrantChallengeRegistryAdapter());
 
 module.exports = {
   DEFAULT_RECEIPT_GRANT_CHALLENGE_REGISTRY_MODE,
@@ -839,6 +843,7 @@ module.exports = {
   createReceiptGrantChallengeRegistryAdapter,
   createReceiptGrantChallengeRegistryHttpHeaders,
   createReceiptGrantChallengeStats,
+  getSharedMockReceiptGrantChallengeRegistry,
   resolveReceiptGrantChallengeRegistryBaseUrl,
   resolveReceiptGrantChallengeRegistryMode,
   resolveReceiptGrantChallengeRegistryPath,

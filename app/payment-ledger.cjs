@@ -3,6 +3,7 @@ const {
   FileJsonStateStore,
   isJsonStateStore,
 } = require("./mock-receipt-state-store.cjs");
+const { createLazySharedInstance } = require('./lazy-shared-instance.cjs');
 const { RedisJsonStateStore } = require("./mock-receipt-redis-state-store.cjs");
 
 const PAYMENT_LEDGER_VERSION = 1;
@@ -653,7 +654,10 @@ function createPaymentLedgerAdapter(options = {}) {
   return new FilePaymentLedger(options);
 }
 
-const sharedPaymentLedger = createPaymentLedgerAdapter();
+const {
+  getInstance: getSharedPaymentLedger,
+  shared: sharedPaymentLedger,
+} = createLazySharedInstance(() => createPaymentLedgerAdapter());
 
 module.exports = {
   DEFAULT_PAYMENT_LEDGER_MODE,
@@ -663,6 +667,7 @@ module.exports = {
   StoreBackedPaymentLedger,
   createPaymentLedgerAdapter,
   createPaymentLedgerStats,
+  getSharedPaymentLedger,
   resolvePaymentLedgerKeyPrefix,
   resolvePaymentLedgerMode,
   resolvePaymentLedgerStoreId,

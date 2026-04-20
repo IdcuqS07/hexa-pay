@@ -4,6 +4,7 @@ const {
   isJsonStateStore,
 } = require("./mock-receipt-state-store.cjs");
 const { HttpJsonStateStore } = require("./mock-receipt-http-state-store.cjs");
+const { createLazySharedInstance } = require('./lazy-shared-instance.cjs');
 const { createRedisCanonicalReceiptRegistry } = require('./mock-receipt-redis-registry.cjs');
 
 const RECEIPT_REGISTRY_VERSION = 1;
@@ -393,7 +394,10 @@ function createReceiptRegistryAdapter(options = {}) {
   return new FileReceiptRegistry(options);
 }
 
-const sharedMockReceiptRegistry = createReceiptRegistryAdapter();
+const {
+  getInstance: getSharedMockReceiptRegistry,
+  shared: sharedMockReceiptRegistry,
+} = createLazySharedInstance(() => createReceiptRegistryAdapter());
 
 module.exports = {
   DEFAULT_RECEIPT_REGISTRY_MODE,
@@ -406,6 +410,7 @@ module.exports = {
   createReceiptRegistryAdapter,
   createReceiptRegistryHttpHeaders,
   createReceiptRegistryStats,
+  getSharedMockReceiptRegistry,
   resolveReceiptRegistryBaseUrl,
   resolveReceiptRegistryMode,
   resolveReceiptRegistryPath,

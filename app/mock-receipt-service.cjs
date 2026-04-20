@@ -20,6 +20,7 @@ const {
   MemoryReceiptGrantChallengeRegistry,
   sharedMockReceiptGrantChallengeRegistry,
 } = require("./mock-receipt-challenge-registry.cjs");
+const { createLazySharedInstance } = require('./lazy-shared-instance.cjs');
 
 const RECEIPT_CANONICAL_SCHEMA_VERSION = 3;
 const RECEIPT_PROJECTION_SCHEMA_VERSION = 1;
@@ -508,13 +509,20 @@ class MockReceiptService {
   }
 }
 
-const sharedMockReceiptService = new MockReceiptService({
-  receiptRegistryAdapter: sharedMockReceiptRegistry,
-  challengeRegistryAdapter: sharedMockReceiptGrantChallengeRegistry,
-});
+const {
+  getInstance: getSharedMockReceiptService,
+  shared: sharedMockReceiptService,
+} = createLazySharedInstance(
+  () =>
+    new MockReceiptService({
+      receiptRegistryAdapter: sharedMockReceiptRegistry,
+      challengeRegistryAdapter: sharedMockReceiptGrantChallengeRegistry,
+    }),
+);
 
 module.exports = {
   MockReceiptService,
+  getSharedMockReceiptService,
   sharedMockReceiptRegistry,
   sharedMockReceiptGrantChallengeRegistry,
   sharedMockReceiptService,
