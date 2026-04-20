@@ -3048,6 +3048,13 @@ body {
   margin-top: 2.75rem;
 }
 
+.hp-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-top: 1.4rem;
+}
+
 .hp-workspace-card,
 .hp-closing-card {
   padding: 2rem;
@@ -3164,6 +3171,7 @@ body {
 
   .hp-nav-actions,
   .hp-hero-actions,
+  .hp-card-actions,
   .hp-workspace-actions,
   .hp-state-track {
     width: 100%;
@@ -3171,6 +3179,7 @@ body {
 
   .hp-nav-actions .hp-btn,
   .hp-hero-actions .hp-btn,
+  .hp-card-actions .hp-btn,
   .hp-workspace-actions .hp-btn {
     width: 100%;
   }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="HexaPay - FHE-powered private treasury, confidential invoices, and controlled financial workflows.">
+  <meta name="description" content="HexaPay - live private finance app for payment rail, private quotes, confidential invoices, and scoped receipt views.">
   <title>HexaPay | Private Payments Secured by FHE</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -38,14 +38,14 @@
 
       <nav class="hp-nav-links" aria-label="Primary navigation">
         <a href="#overview">Overview</a>
-        <a href="#treasury">Private Treasury</a>
-        <a href="#invoices">Invoice Flow</a>
-        <a href="#compliance">Compliance</a>
+        <a href="#payment-rail">Payment Rail</a>
+        <a href="#private-quotes">Private Quotes</a>
+        <a href="#app-routes">App Routes</a>
         <a href="#security">Security</a>
       </nav>
 
       <div class="hp-nav-actions">
-        <a class="hp-btn hp-btn-secondary" href="./hexapay.html?entry=homepage">Workspace</a>
+        <a class="hp-btn hp-btn-secondary" href="./app.html#private-quotes">Private Quotes</a>
         <a class="hp-btn hp-btn-primary" href="./app.html">Launch App</a>
       </div>
     </div>
@@ -56,24 +56,25 @@
       <div class="hp-container hp-hero-layout">
         <div class="hp-hero-copy" data-reveal>
           <div class="hp-kicker">FHE-powered private finance</div>
-          <h1>Private payments. Computed in the dark. Secured by FHE.</h1>
+          <h1>Private finance wired to live HexaPay app routes.</h1>
           <p class="hp-lead">
-            HexaPay keeps balances, transfers, and invoice amounts encrypted while treasury and
-            workflow logic continue to execute securely. Sensitive financial data stays sealed by
-            default and only surfaces through authorized local reveal.
+            HexaPay now connects homepage entry directly to the running app surface: contract-backed
+            dashboard actions, live payment rail execution, merchant private quotes, payer checkout
+            routes, and auditor receipt views. Sensitive financial data stays sealed by default and
+            only surfaces through authorized local reveal or scoped disclosure.
           </p>
           <div class="hp-hero-actions">
             <a class="hp-btn hp-btn-primary hp-btn-lg" href="./app.html">Launch App</a>
-            <a class="hp-btn hp-btn-secondary hp-btn-lg" href="./hexapay.html?entry=homepage">Open Workspace</a>
+            <a class="hp-btn hp-btn-secondary hp-btn-lg" href="./payment-intent.html">Open Payment Rail</a>
           </div>
           <p class="hp-hero-caption">
-            Live app includes confidential balance, encrypted payment, company registration,
-            invoice creation, approval, payment, and private outstanding verification.
+            Live app includes company registration, payment rail execution, private quotes,
+            `pay.html` payer routing, `audit.html` auditor routing, invoices, and the deeper contract workspace.
           </p>
           <div class="hp-chip-row" aria-label="HexaPay trust states">
             <span class="hp-status-chip is-blue">Encrypted by default</span>
-            <span class="hp-status-chip is-violet">Computed privately</span>
-            <span class="hp-status-chip is-green">Verified on output</span>
+            <span class="hp-status-chip is-violet">Private quotes live</span>
+            <span class="hp-status-chip is-green">Onchain rail verified</span>
           </div>
         </div>
 
@@ -105,14 +106,14 @@
             <span class="hp-card-kicker">Operational log</span>
             <ul class="hp-log-list">
               <li>
-                <span>0x160a...fbdf</span>
-                <strong>Outstanding cleared</strong>
-                <small>Workflow verified</small>
+                <span>rail://arb-sepolia</span>
+                <strong>Payment executed</strong>
+                <small>EIP-712 intent settled onchain</small>
               </li>
               <li>
-                <span>0x948e...2c8e</span>
-                <strong>Encrypted payment applied</strong>
-                <small>Core settlement committed</small>
+                <span>quote://merchant</span>
+                <strong>Payer + auditor routes ready</strong>
+                <small>Scoped receipt flow active</small>
               </li>
             </ul>
           </article>
@@ -123,34 +124,86 @@
     <section id="proof" class="hp-proof-strip">
       <div class="hp-container hp-proof-grid">
         <article class="hp-proof-card" data-reveal>
-          <span class="hp-kicker">Private Treasury</span>
-          <h2>Confidential balance rail</h2>
-          <p>Internal settlement stays encrypted until an authorized user performs local reveal.</p>
+          <span class="hp-kicker">Payment Rail</span>
+          <h2>Signed intent to onchain settlement</h2>
+          <p>Approve USDC, sign an EIP-712 intent, and settle through the live HexaPay rail on Arbitrum Sepolia.</p>
           <div class="hp-inline-chips">
-            <span class="hp-mini-chip is-blue">Encrypted</span>
-            <span class="hp-mini-chip is-green">Verified flow</span>
+            <span class="hp-mini-chip is-blue">Dashboard widget</span>
+            <span class="hp-mini-chip is-green">Onchain verified</span>
           </div>
         </article>
 
         <article class="hp-proof-card" data-reveal>
-          <span class="hp-kicker">Invoice Workflow</span>
-          <h2>Issue to settlement</h2>
-          <p>Create, approve, pay, and confirm outstanding without exposing public transaction values.</p>
+          <span class="hp-kicker">Private Quotes</span>
+          <h2>Merchant shell to payer route</h2>
+          <p>Create a quote inside the app, share a dedicated payer route, and keep receipt access role-aware.</p>
           <div class="hp-inline-chips">
-            <span class="hp-mini-chip is-violet">Workflow secured</span>
-            <span class="hp-mini-chip is-green">Outstanding cleared</span>
+            <span class="hp-mini-chip is-violet">Merchant mode</span>
+            <span class="hp-mini-chip is-green">Shared route</span>
           </div>
         </article>
 
         <article class="hp-proof-card" data-reveal>
-          <span class="hp-kicker">Controlled Disclosure</span>
-          <h2>Scoped visibility</h2>
-          <p>Operators, payers, and auditors only see the financial surface they are authorized to inspect.</p>
+          <span class="hp-kicker">Auditor Route</span>
+          <h2>Scoped receipt projection</h2>
+          <p>Auditors open a limited receipt view with masked fields while merchants and payers keep richer access.</p>
           <div class="hp-inline-chips">
             <span class="hp-mini-chip is-muted">Role based</span>
-            <span class="hp-mini-chip is-green">Trust aligned</span>
+            <span class="hp-mini-chip is-green">Masked by policy</span>
           </div>
         </article>
+      </div>
+    </section>
+
+    <section id="app-routes" class="hp-security">
+      <div class="hp-container">
+        <div class="hp-section-head" data-reveal>
+          <div class="hp-kicker">Live App Surface</div>
+          <h2>Home now maps directly to the HexaPay app that is running today.</h2>
+          <p>Open the same operator, merchant, payer, and auditor surfaces that already exist in APP, not a separate marketing-only flow.</p>
+        </div>
+
+        <div class="hp-security-grid">
+          <article class="hp-security-card" data-reveal>
+            <span class="hp-kicker">Dashboard</span>
+            <h3>Contract-backed operator shell</h3>
+            <p>Start from the main app dashboard for company setup, manifest sync, wallet connection, invoices, treasury, and the embedded payment rail.</p>
+            <div class="hp-card-actions">
+              <a class="hp-btn hp-btn-secondary" href="./app.html#dashboard">Open Dashboard</a>
+              <a class="hp-btn hp-btn-secondary" href="./hexapay.html?entry=homepage">Open Workspace</a>
+            </div>
+          </article>
+
+          <article class="hp-security-card" data-reveal id="payment-rail">
+            <span class="hp-kicker">Payment Rail</span>
+            <h3>Standalone and embedded</h3>
+            <p>The secure payment rail lives inside APP and also has its own focused route for intent signing, approval, and onchain execution.</p>
+            <div class="hp-card-actions">
+              <a class="hp-btn hp-btn-secondary" href="./payment-intent.html">Open Payment Rail</a>
+              <a class="hp-btn hp-btn-secondary" href="./app.html#dashboard">Open in APP</a>
+            </div>
+          </article>
+
+          <article class="hp-security-card" data-reveal id="private-quotes">
+            <span class="hp-kicker">Private Quotes</span>
+            <h3>Merchant flow with payer route</h3>
+            <p>Merchants create a quote in APP, then share `pay.html` for the payer. The public route expects a live quote id when active.</p>
+            <div class="hp-card-actions">
+              <a class="hp-btn hp-btn-secondary" href="./app.html#private-quotes">Open Merchant Shell</a>
+              <a class="hp-btn hp-btn-secondary" href="./pay.html">Open Payer Route</a>
+            </div>
+          </article>
+
+          <article class="hp-security-card" data-reveal>
+            <span class="hp-kicker">Auditor View</span>
+            <h3>Limited receipt disclosure</h3>
+            <p>Auditors inspect a dedicated `audit.html` surface with masked projection, while APP remains the source shell for merchant-side control.</p>
+            <div class="hp-card-actions">
+              <a class="hp-btn hp-btn-secondary" href="./audit.html">Open Auditor Surface</a>
+              <a class="hp-btn hp-btn-secondary" href="./app.html#private-quotes">Back to APP</a>
+            </div>
+          </article>
+        </div>
       </div>
     </section>
 
@@ -308,12 +361,12 @@
           <div class="hp-kicker">Controlled Disclosure</div>
           <h2>Privacy with permissioned access and role-based control.</h2>
           <p>
-            Operators, company roles, and auditors can interact with the system through scoped
-            permissions instead of raw financial transparency.
+            Operators, merchants, payers, and auditors now interact through separate app surfaces,
+            scoped receipt projections, and policy-aware disclosure instead of raw financial transparency.
           </p>
           <ul class="hp-feature-list">
             <li>Signer and operator roles align with company-level controls.</li>
-            <li>Compliance access can be narrowed to invoices, balances, or analytics scope.</li>
+            <li>Auditor receipt views stay limited while merchant and payer access remain contextual.</li>
             <li>Local decrypt remains intentional rather than ambient.</li>
           </ul>
         </div>
@@ -373,13 +426,13 @@
             <div class="hp-kicker">Operations Layer</div>
             <h2>HexaPay on the surface. Secure workspace underneath.</h2>
             <p>
-              The homepage explains the product model. The workspace is where operators, companies,
-              and payers execute live treasury, invoice, compliance, and encrypted contract actions.
+              The homepage now points directly into the same APP routes that operators actually use,
+              while the workspace remains available for deeper contract operations and diagnostics.
             </p>
           </div>
           <div class="hp-workspace-actions">
             <a class="hp-btn hp-btn-primary hp-btn-lg" href="./app.html">Launch App</a>
-            <a class="hp-btn hp-btn-secondary hp-btn-lg" href="./hexapay.html?entry=homepage">Open Workspace</a>
+            <a class="hp-btn hp-btn-secondary hp-btn-lg" href="./app.html#private-quotes">Open Private Quotes</a>
           </div>
         </div>
       </div>
@@ -389,10 +442,10 @@
       <div class="hp-container">
         <div class="hp-closing-card" data-reveal>
           <div class="hp-kicker">HexaPay</div>
-          <h2>Finance that stays encrypted from input to verification.</h2>
+          <h2>One home, one app surface, one private finance flow.</h2>
           <p>
-            Private treasury, confidential invoice workflows, and controlled disclosure in one
-            secure product surface.
+            Launch the same APP that now handles dashboard actions, payment rail execution, private quotes,
+            payer routing, and auditor routing.
           </p>
           <a class="hp-btn hp-btn-primary hp-btn-lg" href="./app.html">Launch HexaPay App</a>
         </div>
@@ -407,11 +460,12 @@
           <span class="hp-brand-mark" aria-hidden="true"></span>
           <span class="hp-brand-text">HexaPay</span>
         </div>
-        <p>Built for confidential treasury, invoice workflows, and controlled financial disclosure.</p>
+        <p>Built for confidential treasury, payment rail execution, private quotes, and controlled financial disclosure.</p>
       </div>
       <div class="hp-footer-links">
         <a href="#overview">Overview</a>
-        <a href="#invoices">Invoice Flow</a>
+        <a href="#payment-rail">Payment Rail</a>
+        <a href="#private-quotes">Private Quotes</a>
         <a href="#security">Security</a>
         <a href="./app.html">Launch App</a>
       </div>
