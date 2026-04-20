@@ -119,8 +119,15 @@ HEXAPAY_CHAIN_ID=421614
 # Challenge registry mode
 MOCK_RECEIPT_CHALLENGE_REGISTRY_MODE=redis
 
-# Redis URL (if using Redis)
-MOCK_RECEIPT_REDIS_URL=redis://127.0.0.1:6379
+# Canonical receipt registry mode
+MOCK_RECEIPT_REGISTRY_MODE=redis
+
+# Payment ledger + duplicate execution protection
+HEXAPAY_PAYMENT_LEDGER_MODE=redis
+HEXAPAY_EXECUTION_DEDUPE_MODE=redis
+
+# Shared Redis URL (Upstash / Redis / Valkey)
+HEXAPAY_REDIS_URL=redis://127.0.0.1:6379
 ```
 
 ---

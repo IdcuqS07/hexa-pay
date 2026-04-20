@@ -4,6 +4,10 @@ const {
   verifyIntentSignature,
   hashRequestId,
 } = require("./payment-intent-signature.cjs");
+const {
+  createExecutionDedupeStore,
+  createMemoryExecutionDedupeStore,
+} = require("./payment-intent-dedupe-store.cjs");
 
 function nowMs() {
   return Date.now();
@@ -23,23 +27,6 @@ function normalizeExecutionKey(intent) {
 
 function isDuplicateLedgerStatus(status) {
   return ["signed", "executing", "settled"].includes(String(status || "").toLowerCase());
-}
-
-function createMemoryExecutionDedupeStore() {
-  const keys = new Map();
-
-  return {
-    async has(key) {
-      return keys.has(String(key));
-    },
-    async put(key, value) {
-      keys.set(String(key), value);
-      return value;
-    },
-    async get(key) {
-      return keys.get(String(key)) || null;
-    },
-  };
 }
 
 function createEvmExecutor({
@@ -109,7 +96,7 @@ function createEvmExecutor({
 function createPaymentIntentService(options = {}) {
   const challengeRegistry = options.challengeRegistry;
   const executionDedupeStore =
-    options.executionDedupeStore || createMemoryExecutionDedupeStore();
+    options.executionDedupeStore || createExecutionDedupeStore();
   const executor = options.executor;
   const paymentLedger = options.paymentLedger || null;
   const domain = buildIntentDomain({
@@ -206,8 +193,29 @@ function createPaymentIntentService(options = {}) {
       ? await Promise.resolve(paymentLedger.getByRequestId(intent.requestId))
       : null;
     const duplicateFromLedger = isDuplicateLedgerStatus(existingRecord?.status);
+    let executionClaimed = false;
 
-    if ((await executionDedupeStore.has(dedupeKey)) || duplicateFromLedger) {
+    if (!duplicateFromLedger && typeof executionDedupeStore.claim === "function") {
+      const claimResult = await executionDedupeStore.claim(dedupeKey, {
+        requestId: intent.requestId,
+        merchantId: intent.merchantId,
+        terminalId: intent.terminalId,
+        payer: intent.payer,
+      });
+
+      if (!claimResult?.ok) {
+        const error = new Error("Duplicate execution.");
+        error.code = "duplicate_execution";
+        error.details = {
+          existingRecord: existingRecord || claimResult?.record || null,
+        };
+        throw error;
+      }
+
+      executionClaimed = true;
+    }
+
+    if (!executionClaimed && ((await executionDedupeStore.has(dedupeKey)) || duplicateFromLedger)) {
       const error = new Error("Duplicate execution.");
       error.code = "duplicate_execution";
       if (existingRecord) {
@@ -265,6 +273,9 @@ function createPaymentIntentService(options = {}) {
     if (!executor) {
       const error = new Error("No executor configured.");
       error.code = "executor_missing";
+      if (executionClaimed && typeof executionDedupeStore.release === "function") {
+        await executionDedupeStore.release(dedupeKey).catch(() => null);
+      }
       if (paymentLedger?.markFailed) {
         await Promise.resolve(
           paymentLedger.markFailed(intent, error, {
@@ -290,6 +301,9 @@ function createPaymentIntentService(options = {}) {
         amount: intent.amount,
       });
     } catch (error) {
+      if (executionClaimed && typeof executionDedupeStore.release === "function") {
+        await executionDedupeStore.release(dedupeKey).catch(() => null);
+      }
       if (typeof challengeRegistry.releaseConsume === "function") {
         await challengeRegistry.releaseConsume(intent.challengeId, consumeContext).catch(() => null);
       }
@@ -306,12 +320,21 @@ function createPaymentIntentService(options = {}) {
       throw error;
     }
 
-    await executionDedupeStore.put(dedupeKey, {
-      intentHash,
-      requestIdHash,
-      execution,
-      createdAt: new Date().toISOString(),
-    });
+    if (typeof executionDedupeStore.finalize === "function") {
+      await executionDedupeStore.finalize(dedupeKey, {
+        intentHash,
+        requestIdHash,
+        execution,
+        createdAt: new Date().toISOString(),
+      });
+    } else {
+      await executionDedupeStore.put(dedupeKey, {
+        intentHash,
+        requestIdHash,
+        execution,
+        createdAt: new Date().toISOString(),
+      });
+    }
 
     const commitResult =
       typeof challengeRegistry.commitConsume === "function"

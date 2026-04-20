@@ -3,6 +3,7 @@ const {
   FileJsonStateStore,
   isJsonStateStore,
 } = require("./mock-receipt-state-store.cjs");
+const { RedisJsonStateStore } = require("./mock-receipt-redis-state-store.cjs");
 
 const PAYMENT_LEDGER_VERSION = 1;
 const DEFAULT_PAYMENT_LEDGER_MODE = "file";
@@ -26,6 +27,36 @@ function nowMs() {
 
 function normalizeString(value) {
   return String(value || "");
+}
+
+function resolvePaymentLedgerMode(mode = "") {
+  const normalizedMode = normalizeString(
+    mode || process.env.HEXAPAY_PAYMENT_LEDGER_MODE || DEFAULT_PAYMENT_LEDGER_MODE,
+  )
+    .trim()
+    .toLowerCase();
+
+  if (normalizedMode === "memory" || normalizedMode === "redis") {
+    return normalizedMode;
+  }
+
+  return "file";
+}
+
+function resolvePaymentLedgerStoreId(storeId = "") {
+  return (
+    normalizeString(
+      storeId || process.env.HEXAPAY_PAYMENT_LEDGER_STORE_ID || "payments",
+    ).trim() || "payments"
+  );
+}
+
+function resolvePaymentLedgerKeyPrefix(keyPrefix = "") {
+  return (
+    normalizeString(
+      keyPrefix || process.env.HEXAPAY_PAYMENT_LEDGER_KEY_PREFIX || "hexapay:payment-ledger",
+    ).trim() || "hexapay:payment-ledger"
+  );
 }
 
 function normalizeLowerString(value) {
@@ -602,10 +633,21 @@ function createPaymentLedgerAdapter(options = {}) {
     return new StoreBackedPaymentLedger(options);
   }
 
-  const mode = normalizeString(options.mode || DEFAULT_PAYMENT_LEDGER_MODE).toLowerCase();
+  const mode = resolvePaymentLedgerMode(options.mode);
 
   if (mode === "memory") {
     return new MemoryPaymentLedger(options);
+  }
+
+  if (mode === "redis") {
+    return new StoreBackedPaymentLedger({
+      ...options,
+      stateStore: new RedisJsonStateStore({
+        redis: options.redis,
+        storeId: resolvePaymentLedgerStoreId(options.storeId),
+        keyPrefix: resolvePaymentLedgerKeyPrefix(options.keyPrefix),
+      }),
+    });
   }
 
   return new FilePaymentLedger(options);
@@ -621,5 +663,8 @@ module.exports = {
   StoreBackedPaymentLedger,
   createPaymentLedgerAdapter,
   createPaymentLedgerStats,
+  resolvePaymentLedgerKeyPrefix,
+  resolvePaymentLedgerMode,
+  resolvePaymentLedgerStoreId,
   sharedPaymentLedger,
 };

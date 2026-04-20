@@ -5,8 +5,13 @@ const Redis = require('ioredis');
 let sharedClient = null;
 
 function createRedisClientFromEnv() {
-  const url = process.env.MOCK_RECEIPT_REDIS_URL || 'redis://127.0.0.1:6379';
-  const lazyConnect = process.env.MOCK_RECEIPT_REDIS_LAZY_CONNECT === '1';
+  const url =
+    process.env.HEXAPAY_REDIS_URL ||
+    process.env.MOCK_RECEIPT_REDIS_URL ||
+    'redis://127.0.0.1:6379';
+  const lazyConnect =
+    process.env.HEXAPAY_REDIS_LAZY_CONNECT === '1' ||
+    process.env.MOCK_RECEIPT_REDIS_LAZY_CONNECT === '1';
 
   const client = new Redis(url, {
     lazyConnect,
