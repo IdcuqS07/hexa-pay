@@ -82,6 +82,38 @@ function getExplorerUrl(txHash) {
   return txHash ? `https://sepolia.arbiscan.io/tx/${txHash}` : "";
 }
 
+function stringifyApiMessage(value, fallback = "") {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (value === null || value === undefined) {
+    return fallback;
+  }
+
+  if (typeof value === "object") {
+    const nestedMessage =
+      value.message ||
+      value.error ||
+      value.reason ||
+      value.details?.message ||
+      value.cause?.message ||
+      value.code;
+
+    if (typeof nestedMessage === "string" && nestedMessage.trim()) {
+      return nestedMessage;
+    }
+
+    try {
+      return JSON.stringify(value);
+    } catch (error) {
+      error;
+    }
+  }
+
+  return String(value);
+}
+
 async function postJson(url, body, headers = {}) {
   const response = await fetch(url, {
     method: "POST",
@@ -94,7 +126,9 @@ async function postJson(url, body, headers = {}) {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = new Error(data.error || `Request failed: ${response.status}`);
+    const error = new Error(
+      stringifyApiMessage(data.error ?? data.message, `Request failed: ${response.status}`),
+    );
     error.code = data.code || "request_failed";
     error.details = data.details || null;
     throw error;

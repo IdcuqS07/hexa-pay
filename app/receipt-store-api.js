@@ -8,6 +8,38 @@ const API_RECEIPT_SOURCE_OF_TRUTH = {
   readiness: "shared-adapter-ready",
 };
 
+function stringifyApiMessage(value, fallback = "") {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (value === null || value === undefined) {
+    return fallback;
+  }
+
+  if (typeof value === "object") {
+    const nestedMessage =
+      value.message ||
+      value.error ||
+      value.reason ||
+      value.details?.message ||
+      value.cause?.message ||
+      value.code;
+
+    if (typeof nestedMessage === "string" && nestedMessage.trim()) {
+      return nestedMessage;
+    }
+
+    try {
+      return JSON.stringify(value);
+    } catch (error) {
+      error;
+    }
+  }
+
+  return String(value);
+}
+
 function normalizeAccessContext(accessContext) {
   if (!accessContext || typeof accessContext !== "object") {
     return {
@@ -92,7 +124,9 @@ async function readJson(response) {
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const error = new Error(payload?.error || "Receipt API request failed.");
+    const error = new Error(
+      stringifyApiMessage(payload?.error ?? payload?.message, "Receipt API request failed."),
+    );
     error.code = payload?.code || "";
     error.accessPolicy = payload?.accessPolicy || null;
     error.statusCode = response.status;

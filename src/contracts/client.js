@@ -158,21 +158,53 @@ function serializeErrorMessage(error) {
     return "Unknown error";
   }
 
+  const normalizeMessagePart = (value) => {
+    if (typeof value === "string") {
+      return value;
+    }
+
+    if (value === null || value === undefined) {
+      return "";
+    }
+
+    if (typeof value === "object") {
+      const nested =
+        value.message ||
+        value.error ||
+        value.reason ||
+        value.details?.message ||
+        value.cause?.message ||
+        value.code;
+
+      if (typeof nested === "string" && nested.trim()) {
+        return nested;
+      }
+
+      try {
+        return JSON.stringify(value);
+      } catch (serializationError) {
+        serializationError;
+      }
+    }
+
+    return String(value);
+  };
+
   const primaryMessage =
-    error.shortMessage ||
-    error.reason ||
-    error.error?.message ||
-    error.info?.error?.message ||
-    error.message ||
-    String(error);
+    normalizeMessagePart(error.shortMessage) ||
+    normalizeMessagePart(error.reason) ||
+    normalizeMessagePart(error.error?.message) ||
+    normalizeMessagePart(error.info?.error?.message) ||
+    normalizeMessagePart(error.message) ||
+    normalizeMessagePart(error);
 
   const code = error.code ? `[${error.code}] ` : "";
   const causeMessage =
-    error.cause?.shortMessage ||
-    error.cause?.reason ||
-    error.cause?.error?.message ||
-    error.cause?.message ||
-    error.cause?.cause?.message ||
+    normalizeMessagePart(error.cause?.shortMessage) ||
+    normalizeMessagePart(error.cause?.reason) ||
+    normalizeMessagePart(error.cause?.error?.message) ||
+    normalizeMessagePart(error.cause?.message) ||
+    normalizeMessagePart(error.cause?.cause?.message) ||
     "";
 
   if (causeMessage && causeMessage !== primaryMessage) {

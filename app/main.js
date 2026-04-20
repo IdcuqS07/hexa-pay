@@ -300,10 +300,42 @@ function setStoredWalletProviderId(walletId) {
   window.localStorage.setItem(WALLET_PROVIDER_STORAGE_KEY, walletId);
 }
 
+function stringifyUiMessage(value, fallback = "") {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (value === null || value === undefined) {
+    return fallback;
+  }
+
+  if (typeof value === "object") {
+    const nestedMessage =
+      value.message ||
+      value.error ||
+      value.reason ||
+      value.details?.message ||
+      value.cause?.message ||
+      value.code;
+
+    if (typeof nestedMessage === "string" && nestedMessage.trim()) {
+      return nestedMessage;
+    }
+
+    try {
+      return JSON.stringify(value);
+    } catch (error) {
+      error;
+    }
+  }
+
+  return String(value);
+}
+
 function setNotice(summary, tone = "muted") {
   state.notice = {
     tone,
-    summary,
+    summary: stringifyUiMessage(summary, ""),
   };
 }
 
@@ -506,6 +538,17 @@ function normalizePaymentHistoryRecord(record = {}) {
   };
 }
 
+function extractApiErrorMessage(payload, fallback) {
+  const primary =
+    payload?.error ??
+    payload?.message ??
+    payload?.details ??
+    payload?.cause ??
+    fallback;
+
+  return stringifyUiMessage(primary, fallback);
+}
+
 async function syncPaymentHistory({ silent = true } = {}) {
   const wallet = normalizeAddress(state.runtime?.account || "");
 
@@ -540,7 +583,9 @@ async function syncPaymentHistory({ silent = true } = {}) {
     const payload = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      throw new Error(payload.error || `Payment history request failed (${response.status})`);
+      throw new Error(
+        extractApiErrorMessage(payload, `Payment history request failed (${response.status})`),
+      );
     }
 
     const records = Array.isArray(payload.records)

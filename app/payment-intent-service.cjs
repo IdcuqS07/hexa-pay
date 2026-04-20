@@ -21,6 +21,10 @@ function normalizeExecutionKey(intent) {
   return `${intent.merchantId}:${intent.terminalId}:${intent.requestId}`;
 }
 
+function isDuplicateLedgerStatus(status) {
+  return ["signed", "executing", "settled"].includes(String(status || "").toLowerCase());
+}
+
 function createMemoryExecutionDedupeStore() {
   const keys = new Map();
 
@@ -198,12 +202,17 @@ function createPaymentIntentService(options = {}) {
     }
 
     const dedupeKey = normalizeExecutionKey(intent);
-    if (await executionDedupeStore.has(dedupeKey)) {
+    const existingRecord = paymentLedger?.getByRequestId
+      ? await Promise.resolve(paymentLedger.getByRequestId(intent.requestId))
+      : null;
+    const duplicateFromLedger = isDuplicateLedgerStatus(existingRecord?.status);
+
+    if ((await executionDedupeStore.has(dedupeKey)) || duplicateFromLedger) {
       const error = new Error("Duplicate execution.");
       error.code = "duplicate_execution";
-      if (paymentLedger?.getByRequestId) {
+      if (existingRecord) {
         error.details = {
-          existingRecord: await Promise.resolve(paymentLedger.getByRequestId(intent.requestId)),
+          existingRecord,
         };
       }
       throw error;
