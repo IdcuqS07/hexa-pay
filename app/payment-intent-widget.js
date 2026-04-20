@@ -369,6 +369,11 @@ function createWidgetStyles() {
       flex-wrap: wrap;
       margin-top: 18px;
     }
+    .hp-wallet-hint {
+      margin-top: 12px;
+      color: #8ea0b8;
+      font-size: 13px;
+    }
     .hp-btn-primary, .hp-btn-secondary {
       border-radius: 18px;
       padding: 14px 18px;
@@ -529,6 +534,7 @@ function createMarkup(config = {}) {
               <button class="hp-btn-primary" data-role="execute-btn">Execute Payment</button>
               <a class="hp-btn-secondary" data-role="explorer-link" target="_blank" rel="noreferrer" style="display:none;">View on Arbiscan</a>
             </div>
+            <div class="hp-wallet-hint" data-role="connected-wallet">Connected wallet: Not connected</div>
           </div>
 
           <div style="display:grid; gap:24px;">
@@ -581,6 +587,7 @@ export function mountPaymentIntentWidget(container, options = {}) {
   const explorerLink = container.querySelector('[data-role="explorer-link"]');
   const errorBox = container.querySelector('[data-role="error-box"]');
   const successBox = container.querySelector('[data-role="success-box"]');
+  const connectedWalletHint = container.querySelector('[data-role="connected-wallet"]');
 
   const fields = {
     merchantId: container.querySelector('[data-field="merchantId"]'),
@@ -607,6 +614,36 @@ export function mountPaymentIntentWidget(container, options = {}) {
     signing: container.querySelector('[data-step="signing"]'),
     execute: container.querySelector('[data-step="execute"]'),
   };
+
+  let walletEventsBound = false;
+
+  function renderConnectedWallet(address = "") {
+    if (!connectedWalletHint) {
+      return;
+    }
+
+    connectedWalletHint.textContent = address
+      ? `Connected wallet: ${shortHash(address)}`
+      : "Connected wallet: Not connected";
+  }
+
+  async function refreshConnectedWallet() {
+    if (!window.ethereum) {
+      renderConnectedWallet("");
+      return;
+    }
+
+    try {
+      const accounts = await window.ethereum.request({ method: "eth_accounts" });
+      renderConnectedWallet(Array.isArray(accounts) && accounts[0] ? String(accounts[0]) : "");
+    } catch {
+      renderConnectedWallet("");
+    }
+  }
+
+  function handleWalletStateChange() {
+    refreshConnectedWallet();
+  }
 
   function setStatus(status) {
     statusBadge.className = `hp-pay-status ${status}`;
@@ -696,6 +733,7 @@ export function mountPaymentIntentWidget(container, options = {}) {
       await ensureArbSepolia();
       const { address: payer } = await getSignerAndAddress();
       outputs.payer.textContent = shortHash(payer);
+      renderConnectedWallet(payer);
 
       const requestId = createRequestId();
       outputs.requestId.textContent = shortHash(requestId);
@@ -830,10 +868,22 @@ export function mountPaymentIntentWidget(container, options = {}) {
     }
   }
 
+  refreshConnectedWallet();
+
+  if (window.ethereum?.on) {
+    window.ethereum.on("accountsChanged", handleWalletStateChange);
+    window.ethereum.on("chainChanged", handleWalletStateChange);
+    walletEventsBound = true;
+  }
+
   executeBtn.addEventListener("click", handleExecute);
 
   return {
     destroy() {
+      if (walletEventsBound && window.ethereum?.removeListener) {
+        window.ethereum.removeListener("accountsChanged", handleWalletStateChange);
+        window.ethereum.removeListener("chainChanged", handleWalletStateChange);
+      }
       executeBtn.removeEventListener("click", handleExecute);
       container.innerHTML = "";
     },
