@@ -11,6 +11,7 @@ Repo ini sekarang memakai folder `docs/` untuk menampung dokumen yang sifatnya r
 - [INTEGRATION_STATUS.md](./status/INTEGRATION_STATUS.md)
 - [INTEGRATION_SUMMARY.md](./status/INTEGRATION_SUMMARY.md)
 - [MILESTONE_COMPLETION_SUMMARY.md](./status/MILESTONE_COMPLETION_SUMMARY.md)
+- [RELEASE_NOTE_2026-04-20.md](./status/RELEASE_NOTE_2026-04-20.md)
 
 ## Guides
 
