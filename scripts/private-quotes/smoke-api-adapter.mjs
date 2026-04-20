@@ -11,6 +11,7 @@ import { ReceiptRoles } from "../../app/receipt-types.js";
 import { createReceiptApiMiddleware } from "../../app/mock-receipt-api-plugin.cjs";
 import { createReceiptAccessGrantToken } from "../../app/mock-receipt-grants.cjs";
 import { MockReceiptService } from "../../app/mock-receipt-service.cjs";
+import { createPaymentLedgerAdapter } from "../../app/payment-ledger.cjs";
 import {
   FileReceiptRegistry,
   createReceiptRegistryAdapter,
@@ -21,6 +22,7 @@ import {
 } from "../../app/mock-receipt-challenge-registry.cjs";
 import { MemoryJsonStateStore } from "../../app/mock-receipt-state-store.cjs";
 import { HttpJsonStateStore } from "../../app/mock-receipt-http-state-store.cjs";
+import { hashPaymentIntent, hashRequestId } from "../../app/payment-intent-signature.cjs";
 
 function createViewerToken(role, viewer, chainId = "31337") {
   return `receipt-viewer:${role}:${String(viewer).toLowerCase()}:${chainId}`;
@@ -32,6 +34,28 @@ const MERCHANT_WALLET = new Wallet(
 const PAYER_WALLET = new Wallet(
   "0x2000000000000000000000000000000000000000000000000000000000000002",
 );
+
+const PAYMENT_INTENT_TYPES = {
+  PaymentIntent: [
+    { name: "challengeId", type: "string" },
+    { name: "requestId", type: "string" },
+    { name: "receiptId", type: "string" },
+    { name: "quoteId", type: "string" },
+    { name: "merchantId", type: "string" },
+    { name: "terminalId", type: "string" },
+    { name: "payer", type: "address" },
+    { name: "merchant", type: "address" },
+    { name: "token", type: "address" },
+    { name: "amount", type: "uint256" },
+    { name: "currency", type: "string" },
+    { name: "decimals", type: "uint8" },
+    { name: "permitHash", type: "string" },
+    { name: "sessionId", type: "string" },
+    { name: "deviceFingerprintHash", type: "string" },
+    { name: "issuedAtMs", type: "uint256" },
+    { name: "expiresAtMs", type: "uint256" },
+  ],
+};
 
 function createSampleReceipt() {
   return {
@@ -113,10 +137,27 @@ async function main() {
   const challengeRegistryAdapter = new FileReceiptGrantChallengeRegistry({
     filePath: registryFilePath,
   });
+  const paymentLedgerAdapter = createPaymentLedgerAdapter({
+    mode: "memory",
+  });
   const receiptService = new MockReceiptService({
     receiptRegistryAdapter,
     challengeRegistryAdapter,
   });
+  const previousPaymentEnv = {
+    rpc: process.env.ARB_SEPOLIA_RPC_URL,
+    key: process.env.HEXAPAY_EXECUTOR_PRIVATE_KEY,
+    contract: process.env.HEXAPAY_EXECUTOR_CONTRACT_ADDRESS,
+    chainId: process.env.HEXAPAY_CHAIN_ID,
+  };
+  process.env.ARB_SEPOLIA_RPC_URL = process.env.ARB_SEPOLIA_RPC_URL || "http://example.invalid";
+  process.env.HEXAPAY_EXECUTOR_PRIVATE_KEY =
+    process.env.HEXAPAY_EXECUTOR_PRIVATE_KEY ||
+    "0x3000000000000000000000000000000000000000000000000000000000000003";
+  process.env.HEXAPAY_EXECUTOR_CONTRACT_ADDRESS =
+    process.env.HEXAPAY_EXECUTOR_CONTRACT_ADDRESS ||
+    "0xD3cBE1F9A84E96DF340bef7b9D2B7C466Eb29d55";
+  process.env.HEXAPAY_CHAIN_ID = process.env.HEXAPAY_CHAIN_ID || "421614";
   const originalFetch = globalThis.fetch;
   globalThis.fetch = createInMemoryFetch({
     receiptRegistryAdapter: new FileReceiptRegistry({
@@ -125,6 +166,22 @@ async function main() {
     challengeRegistryAdapter: new FileReceiptGrantChallengeRegistry({
       filePath: registryFilePath,
     }),
+    paymentLedger: paymentLedgerAdapter,
+    paymentExecutor: {
+      async execute({ intentHash, requestIdHash, token, payer, merchant, amount }) {
+        return {
+          txHash: `0x${"42".repeat(32)}`,
+          blockNumber: 424242,
+          status: 1,
+          intentHash,
+          requestIdHash,
+          token,
+          payer,
+          merchant,
+          amount,
+        };
+      },
+    },
   });
 
   try {
@@ -376,6 +433,90 @@ async function main() {
       },
     );
 
+    const paymentChallengeResponse = await fetch(`${baseUrl}/api/payments/challenges`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        requestId: "payment-smoke-001",
+        receiptId: "receipt-smoke-001",
+        quoteId: "quote-smoke-api",
+        merchantId: "merchant-test-001",
+        terminalId: "terminal-test-001",
+        amount: "1000000",
+        currency: "USDC",
+        payer: PAYER_WALLET.address,
+        merchant: MERCHANT_WALLET.address,
+      }),
+    });
+    const paymentChallengePayload = await paymentChallengeResponse.json();
+    assert.equal(paymentChallengeResponse.status, 200);
+    assert.equal(paymentChallengePayload.ok, true);
+    assert.equal(paymentChallengePayload.record.requestId, "payment-smoke-001");
+
+    const paymentIntent = {
+      challengeId: paymentChallengePayload.record.challengeId,
+      requestId: paymentChallengePayload.record.requestId,
+      receiptId: paymentChallengePayload.record.receiptId,
+      quoteId: paymentChallengePayload.record.quoteId || "",
+      merchantId: paymentChallengePayload.record.merchantId,
+      terminalId: paymentChallengePayload.record.terminalId,
+      payer: paymentChallengePayload.record.payer,
+      merchant: paymentChallengePayload.record.merchant,
+      token: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+      amount: String(paymentChallengePayload.record.amount),
+      currency: paymentChallengePayload.record.currency,
+      decimals: 6,
+      permitHash: "",
+      sessionId: "",
+      deviceFingerprintHash: "",
+      issuedAtMs: String(paymentChallengePayload.record.issuedAtMs),
+      expiresAtMs: String(paymentChallengePayload.record.expiresAtMs),
+    };
+    const paymentSignature = await PAYER_WALLET.signTypedData(
+      paymentChallengePayload.record.domain,
+      PAYMENT_INTENT_TYPES,
+      paymentIntent,
+    );
+    const paymentExecuteResponse = await fetch(`${baseUrl}/api/payments/execute`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        intent: paymentIntent,
+        signature: paymentSignature,
+      }),
+    });
+    const paymentExecutePayload = await paymentExecuteResponse.json();
+    assert.equal(paymentExecuteResponse.status, 200);
+    assert.equal(paymentExecutePayload.status, "executed");
+    assert.equal(
+      paymentExecutePayload.intentHash,
+      hashPaymentIntent(paymentChallengePayload.record.domain, paymentIntent),
+    );
+    assert.equal(paymentExecutePayload.requestIdHash, hashRequestId(paymentIntent.requestId));
+
+    const paymentListResponse = await fetch(
+      `${baseUrl}/api/payments/list?wallet=${encodeURIComponent(PAYER_WALLET.address)}&limit=10`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      },
+    );
+    const paymentListPayload = await paymentListResponse.json();
+    assert.equal(paymentListResponse.status, 200);
+    assert.equal(paymentListPayload.ok, true);
+    assert.equal(paymentListPayload.summary.returnedCount, 1);
+    assert.equal(paymentListPayload.records[0].requestId, paymentIntent.requestId);
+    assert.equal(paymentListPayload.records[0].status, "settled");
+    assert.equal(paymentListPayload.records[0].txHash, paymentExecutePayload.txHash);
+    assert.equal(paymentListPayload.records[0].payer, PAYER_WALLET.address);
+    assert.equal(paymentListPayload.records[0].merchant, MERCHANT_WALLET.address);
+
     const remoteBaseUrl = "http://receipt.remote";
     const remoteReceiptStateStore = new MemoryJsonStateStore({
       label: "remote-http",
@@ -530,6 +671,14 @@ async function main() {
     console.log("Private Quotes API adapter smoke test passed.");
   } finally {
     globalThis.fetch = originalFetch;
+    if (previousPaymentEnv.rpc == null) delete process.env.ARB_SEPOLIA_RPC_URL;
+    else process.env.ARB_SEPOLIA_RPC_URL = previousPaymentEnv.rpc;
+    if (previousPaymentEnv.key == null) delete process.env.HEXAPAY_EXECUTOR_PRIVATE_KEY;
+    else process.env.HEXAPAY_EXECUTOR_PRIVATE_KEY = previousPaymentEnv.key;
+    if (previousPaymentEnv.contract == null) delete process.env.HEXAPAY_EXECUTOR_CONTRACT_ADDRESS;
+    else process.env.HEXAPAY_EXECUTOR_CONTRACT_ADDRESS = previousPaymentEnv.contract;
+    if (previousPaymentEnv.chainId == null) delete process.env.HEXAPAY_CHAIN_ID;
+    else process.env.HEXAPAY_CHAIN_ID = previousPaymentEnv.chainId;
     if (previousDebugState == null) {
       delete process.env.MOCK_RECEIPT_ALLOW_DEBUG_STATE;
     } else {
@@ -537,6 +686,7 @@ async function main() {
     }
     await receiptRegistryAdapter.clear();
     await challengeRegistryAdapter.clear();
+    await paymentLedgerAdapter.clear();
   }
 }
 

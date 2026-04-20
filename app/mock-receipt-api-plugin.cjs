@@ -12,6 +12,9 @@ const {
   createPaymentIntentService,
   createEvmExecutor,
 } = require("./payment-intent-service.cjs");
+const {
+  sharedPaymentLedger,
+} = require("./payment-ledger.cjs");
 
 function readRequestBody(req) {
   return new Promise((resolve, reject) => {
@@ -128,6 +131,11 @@ function resolveReceiptStateStores(options = {}, receiptService = null) {
 
   const receiptRegistryStore = receiptService?.receiptRegistryAdapter?.stateStore;
   const challengeRegistryStore = receiptService?.challengeRegistryAdapter?.stateStore;
+  const paymentLedgerStore =
+    options.paymentLedger?.stateStore ||
+    options.paymentLedgerAdapter?.stateStore ||
+    options.paymentIntentService?.paymentLedger?.stateStore ||
+    null;
 
   if (shouldExposeStateStore(receiptRegistryStore) && !stateStores.registry) {
     stateStores.registry = receiptService.receiptRegistryAdapter.stateStore;
@@ -135,6 +143,10 @@ function resolveReceiptStateStores(options = {}, receiptService = null) {
 
   if (shouldExposeStateStore(challengeRegistryStore) && !stateStores.challenges) {
     stateStores.challenges = receiptService.challengeRegistryAdapter.stateStore;
+  }
+
+  if (shouldExposeStateStore(paymentLedgerStore) && !stateStores.payments) {
+    stateStores.payments = paymentLedgerStore;
   }
 
   return stateStores;
@@ -190,7 +202,14 @@ async function clearStateStoreEntry(store, expectedRevision) {
 
 function createReceiptApiMiddleware(options = {}) {
   const receiptService = resolveReceiptService(options);
-  const stateStores = resolveReceiptStateStores(options, receiptService);
+  const paymentLedger = options.paymentLedger || options.paymentLedgerAdapter || sharedPaymentLedger;
+  const stateStores = resolveReceiptStateStores(
+    {
+      ...options,
+      paymentLedger,
+    },
+    receiptService,
+  );
   const persistenceAuth = createPersistenceAuth(options.persistenceAuth || {});
   
   // Initialize payment intent service
@@ -209,7 +228,10 @@ function createReceiptApiMiddleware(options = {}) {
     challengeRegistry: Boolean(receiptService?.challengeRegistryAdapter),
   });
 
-  if (hasExecutorEnv) {
+  if (options.paymentIntentService) {
+    paymentIntentService = options.paymentIntentService;
+    console.log("[payment-intent] using injected service");
+  } else if (hasExecutorEnv) {
     try {
       const executor = options.paymentExecutor || createEvmExecutor({
         rpcUrl: process.env.ARB_SEPOLIA_RPC_URL,
@@ -227,6 +249,7 @@ function createReceiptApiMiddleware(options = {}) {
         domainName: process.env.HEXAPAY_EIP712_NAME || "HexaPay",
         domainVersion: process.env.HEXAPAY_EIP712_VERSION || "1",
         executor,
+        paymentLedger,
       });
 
       console.log("[payment-intent] service initialized successfully");
@@ -545,6 +568,48 @@ function createReceiptApiMiddleware(options = {}) {
           writeJson(res, 400, {
             error: error.message || "Challenge creation failed",
             code: error.code || "challenge_creation_failed",
+          });
+        }
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/api/payments/list") {
+        try {
+          const result = await paymentIntentService.listPayments({
+            wallet: url.searchParams.get("wallet") || "",
+            merchant: url.searchParams.get("merchant") || "",
+            payer: url.searchParams.get("payer") || "",
+            status: url.searchParams.get("status") || "",
+            limit: url.searchParams.get("limit") || "",
+          });
+          writeJson(res, 200, {
+            ok: true,
+            ...result,
+          });
+        } catch (error) {
+          writeJson(res, 500, {
+            error: error.message || "Payment list failed",
+            code: error.code || "payment_list_failed",
+          });
+        }
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/api/payments/_debug/ledger") {
+        if (!isDebugStateEnabled()) {
+          writeJson(res, 404, { error: "Not found" });
+          return;
+        }
+
+        try {
+          const snapshot = await paymentIntentService.getPaymentLedgerSnapshot({
+            includeRecords: url.searchParams.get("records") === "1",
+          });
+          writeJson(res, 200, snapshot);
+        } catch (error) {
+          writeJson(res, 500, {
+            error: error.message || "Payment ledger snapshot failed",
+            code: error.code || "payment_ledger_snapshot_failed",
           });
         }
         return;

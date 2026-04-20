@@ -19,6 +19,9 @@ The differentiator is not privacy alone. The differentiator is:
 Execution companion for the active private quote workstream:
 - `docs/private-quotes/PRIVATE_QUOTES_NEXT_PHASE_ROADMAP.md`
 
+Execution companion for internal developer waves:
+- `docs/guides/GLOBAL_DEVELOPER_ROADMAP.md`
+
 ## Architectural direction
 
 ## One product, not one giant contract

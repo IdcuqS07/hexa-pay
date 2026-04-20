@@ -1,6 +1,9 @@
 import { Contract, getAddress, keccak256, toUtf8Bytes } from "ethers";
 import { getChainMetadata } from "../src/contracts/config.js";
-import { appendPrivateQuoteStoreMode } from "./config.js";
+import {
+  appendPrivateQuoteStoreMode,
+  isPrivateQuoteDevControlsEnabled,
+} from "./config.js";
 
 const DEFAULT_PRIVATE_QUOTE_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
 const DEFAULT_PRIVATE_QUOTE_CHAIN_ID = "31337";
@@ -39,12 +42,26 @@ const PRIVATE_QUOTE_STATUS_LABELS = {
 let privateQuoteConfigPromise = null;
 
 function fallbackPrivateQuoteConfig() {
+  if (!isPrivateQuoteDevControlsEnabled()) {
+    return {
+      address: "",
+      chainId: "421614",
+      network: getChainMetadata("421614").label,
+      source: "missing-live-manifest",
+      isFallback: true,
+      isConfigured: false,
+      isLiveMisconfigured: true,
+    };
+  }
+
   return {
     address: DEFAULT_PRIVATE_QUOTE_ADDRESS,
     chainId: DEFAULT_PRIVATE_QUOTE_CHAIN_ID,
     network: getChainMetadata(DEFAULT_PRIVATE_QUOTE_CHAIN_ID).label,
     source: "fallback",
     isFallback: true,
+    isConfigured: true,
+    isLiveMisconfigured: false,
   };
 }
 
@@ -64,6 +81,21 @@ function normalizePrivateQuoteConfig(payload, source = "/deployment-private-quot
     payload.privateQuote ||
     payload.address ||
     "";
+  const liveManifestLooksLocal =
+    !isPrivateQuoteDevControlsEnabled() &&
+    (String(payload.network || "").toLowerCase() === "localhost" || String(chainId) === "31337");
+
+  if (liveManifestLooksLocal) {
+    return {
+      address: "",
+      chainId: "421614",
+      network: getChainMetadata("421614").label,
+      source,
+      isFallback: false,
+      isConfigured: false,
+      isLiveMisconfigured: true,
+    };
+  }
 
   try {
     return {
@@ -72,6 +104,8 @@ function normalizePrivateQuoteConfig(payload, source = "/deployment-private-quot
       network: payload.network || getChainMetadata(chainId).label,
       source,
       isFallback: false,
+      isConfigured: true,
+      isLiveMisconfigured: false,
     };
   } catch (error) {
     return fallbackPrivateQuoteConfig();

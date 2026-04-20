@@ -48,6 +48,7 @@ import { ReceiptRoles } from "./receipt-types.js";
 import {
   appendPrivateQuoteStoreMode,
   getPrivateQuoteStoreMode,
+  isPrivateQuoteDevControlsEnabled,
   getPrivateQuoteStoreModeLabel,
   setPrivateQuoteStoreMode,
   PRIVATE_QUOTE_STORE_MODE_STORAGE_KEY,
@@ -81,6 +82,13 @@ const state = {
   tokenSnapshot: null,
   companySnapshot: null,
   recentActivity: [],
+  paymentHistory: {
+    records: [],
+    loading: false,
+    error: "",
+    syncedAt: 0,
+    wallet: "",
+  },
   privateBalance: createDefaultPrivateBalance(),
   invoiceSnapshots: {},
   policySnapshots: {},
@@ -444,6 +452,122 @@ function recordRecentActivity(title, module, receipt, metadata = {}) {
   saveRecentActivity();
 }
 
+function formatPaymentHistoryAmount(amount, decimals = 6) {
+  try {
+    const display = formatUnits(String(amount || "0"), Number(decimals || 6));
+    const [whole, fraction = ""] = display.split(".");
+    const trimmedFraction = fraction.replace(/0+$/, "");
+    return trimmedFraction ? `${whole}.${trimmedFraction}` : whole;
+  } catch (error) {
+    return String(amount || "0");
+  }
+}
+
+function getPaymentHistoryDirection(status) {
+  switch (String(status || "").toLowerCase()) {
+    case "settled":
+      return "positive";
+    case "failed":
+      return "negative";
+    default:
+      return "neutral";
+  }
+}
+
+function getPaymentHistoryTimestamp(record) {
+  return Number(
+    record?.lifecycle?.settledAt ||
+      record?.lifecycle?.failedAt ||
+      record?.lifecycle?.executingAt ||
+      record?.lifecycle?.signedAt ||
+      record?.lifecycle?.challengeAt ||
+      record?.updatedAt ||
+      0,
+  );
+}
+
+function normalizePaymentHistoryRecord(record = {}) {
+  return {
+    requestId: String(record.requestId || ""),
+    challengeId: String(record.challengeId || ""),
+    txHash: String(record.txHash || ""),
+    merchant: String(record.merchant || ""),
+    payer: String(record.payer || ""),
+    merchantId: String(record.merchantId || ""),
+    terminalId: String(record.terminalId || ""),
+    amount: formatPaymentHistoryAmount(record.amount, record.decimals || 6),
+    currency: String(record.currency || "USDC"),
+    status: String(record.status || "challenge"),
+    confirmedAt: getPaymentHistoryTimestamp(record) || Date.now(),
+    explorerUrl: record.txHash ? getExplorerLink(state.selectedChainId, record.txHash) : "",
+    intentHash: String(record.intentHash || ""),
+    source: "payment-history",
+  };
+}
+
+async function syncPaymentHistory({ silent = true } = {}) {
+  const wallet = normalizeAddress(state.runtime?.account || "");
+
+  if (!wallet) {
+    state.paymentHistory = {
+      records: [],
+      loading: false,
+      error: "",
+      syncedAt: 0,
+      wallet: "",
+    };
+    return;
+  }
+
+  if (!silent) {
+    state.paymentHistory.loading = true;
+    state.paymentHistory.error = "";
+    render();
+  }
+
+  try {
+    const url = new URL("/api/payments/list", window.location.origin);
+    url.searchParams.set("wallet", wallet);
+    url.searchParams.set("limit", "8");
+
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(payload.error || `Payment history request failed (${response.status})`);
+    }
+
+    const records = Array.isArray(payload.records)
+      ? payload.records.map((record) => normalizePaymentHistoryRecord(record))
+      : [];
+
+    state.paymentHistory = {
+      records,
+      loading: false,
+      error: "",
+      syncedAt: Date.now(),
+      wallet,
+    };
+  } catch (error) {
+    state.paymentHistory = {
+      records: [],
+      loading: false,
+      error: String(error?.message || "Payment history is unavailable."),
+      syncedAt: Date.now(),
+      wallet,
+    };
+  } finally {
+    if (!silent) {
+      render();
+    }
+  }
+}
+
 function detachWalletListeners() {
   if (!boundWalletProvider) {
     return;
@@ -586,6 +710,12 @@ function requirePrivateQuoteRuntime() {
 function requirePrivateQuoteChain() {
   if (!state.privateQuoteConfig) {
     throw new Error("Private quote module config is still loading.");
+  }
+
+  if (state.privateQuoteConfig.isLiveMisconfigured || !state.privateQuoteConfig.address) {
+    throw new Error(
+      "Private quote live manifest is not configured yet. Update deployment-private-quote.json with the live contract before using this route.",
+    );
   }
 
   if (state.runtime.chainId !== state.privateQuoteConfig.chainId) {
@@ -894,6 +1024,7 @@ async function refreshAppState({ requestAccounts = false, silent = false, wallet
     state.companySnapshot = companySnapshot;
     syncWalletListeners(runtime.walletProvider);
     await syncLatestPrivateQuoteReceipts();
+    await syncPaymentHistory({ silent: true });
 
     if (!state.manifest) {
       setNotice("Sync manifest first so the app can discover the live contract suite.", "warn");
@@ -2109,6 +2240,7 @@ function renderPaymentIntentWidget() {
             subtitle: `Request ${result.requestId.slice(0, 16)}...`,
           }
         );
+        syncPaymentHistory({ silent: true }).then(() => render());
         render();
       },
       onError: (error) => {
@@ -2123,6 +2255,7 @@ function renderPrivateQuoteSummary() {
   const summary = document.querySelector("[data-private-quote-summary]");
   const helper = document.querySelector("[data-private-quote-helper]");
   const storeModeField = document.querySelector("[data-private-quote-store-mode]");
+  const storeModeFieldWrapper = storeModeField?.closest(".pq-store-mode-field") || null;
   const switchButton = document.querySelector("[data-private-quote-switch-button]");
   const resultCard = document.querySelector("[data-private-quote-result]");
   const receiptCard = document.querySelector("[data-private-quote-receipt]");
@@ -2161,9 +2294,13 @@ function renderPrivateQuoteSummary() {
     : "Wallet offline";
   const moduleChain = config ? getChainMetadata(config.chainId).shortLabel : "Loading";
   const storeModeLabel = getPrivateQuoteStoreModeLabel(receiptStoreMode);
+  const showDevControls = isPrivateQuoteDevControlsEnabled();
 
   if (!config) {
     helper.textContent = "Loading private quote module config...";
+  } else if (config.isLiveMisconfigured) {
+    helper.textContent =
+      "Live private quote manifest still points to localhost. Update public/deployment-private-quote.json to the Arbitrum Sepolia contract before using this surface.";
   } else if (!state.runtime.connected) {
     helper.textContent = `Connect a wallet first. Private quote module is configured on ${moduleChain}.`;
   } else if (state.runtime.chainId !== config.chainId) {
@@ -2178,12 +2315,12 @@ function renderPrivateQuoteSummary() {
       <strong>${escapeHtml(moduleChain)}</strong>
     </div>
     <div class="summary-row">
-      <span>Receipt store</span>
-      <strong>${escapeHtml(storeModeLabel)}</strong>
+      <span>${showDevControls ? "Receipt store" : "Receipt source"}</span>
+      <strong>${escapeHtml(showDevControls ? storeModeLabel : "Backend API")}</strong>
     </div>
     <div class="summary-row">
       <span>Contract</span>
-      <strong>${escapeHtml(config ? shortAddress(config.address) : "Loading...")}</strong>
+      <strong>${escapeHtml(config?.address ? shortAddress(config.address) : config?.isLiveMisconfigured ? "Manifest mismatch" : "Loading...")}</strong>
     </div>
     <div class="summary-row">
       <span>Wallet</span>
@@ -2195,7 +2332,7 @@ function renderPrivateQuoteSummary() {
     </div>
   `;
 
-  switchButton.hidden = !config;
+  switchButton.hidden = !config || config.isLiveMisconfigured;
   switchButton.disabled =
     state.busyAction !== "" ||
     state.busyCommand === "connect-wallet" ||
@@ -2209,6 +2346,9 @@ function renderPrivateQuoteSummary() {
   if (storeModeField) {
     storeModeField.value = receiptStoreMode;
     storeModeField.disabled = state.busyAction !== "" || state.busyCommand !== "";
+  }
+  if (storeModeFieldWrapper) {
+    storeModeFieldWrapper.hidden = !showDevControls;
   }
 
   resultCard.hidden = !latestQuote;
@@ -2700,8 +2840,67 @@ function renderContractCards() {
 
 function renderActivityList() {
   const list = document.querySelector("[data-activity-list]");
+  const summary = document.querySelector("[data-payment-history-summary]");
+  const historyRecords = Array.isArray(state.paymentHistory.records)
+    ? state.paymentHistory.records
+    : [];
+  const mergedEntries = [];
+  const seenHashes = new Set();
 
-  if (!state.recentActivity.length) {
+  historyRecords.forEach((record) => {
+    const hashKey = record.txHash || record.requestId;
+    if (hashKey) {
+      seenHashes.add(hashKey);
+    }
+
+    mergedEntries.push({
+      hash: hashKey || `payment-${record.requestId}`,
+      title: `Payment ${String(record.status || "challenge").toLowerCase()}`,
+      module: "Payments",
+      subtitle: record.requestId ? `Request ${record.requestId.slice(0, 16)}...` : "Payment rail",
+      amountDisplay: record.amount || "0",
+      currency: record.currency || "USDC",
+      direction: getPaymentHistoryDirection(record.status),
+      blockNumber: "",
+      explorerUrl: record.explorerUrl || "",
+      identifiers: {
+        requestId: record.requestId,
+        intentHash: record.intentHash,
+      },
+      confirmedAt: Number(record.confirmedAt || Date.now()),
+      source: "payment-history",
+      metaLabel: String(record.status || "challenge").toUpperCase(),
+    });
+  });
+
+  state.recentActivity.forEach((entry) => {
+    const hashKey = String(entry.hash || "");
+    if (hashKey && seenHashes.has(hashKey)) {
+      return;
+    }
+
+    mergedEntries.push({
+      ...entry,
+      source: entry.source || "local-log",
+      metaLabel: entry.metaLabel || "",
+    });
+  });
+
+  mergedEntries.sort((left, right) => Number(right.confirmedAt || 0) - Number(left.confirmedAt || 0));
+
+  if (summary) {
+    if (state.paymentHistory.loading) {
+      summary.textContent = "Syncing payment history for the connected wallet...";
+    } else if (state.paymentHistory.error) {
+      summary.textContent = state.paymentHistory.error;
+    } else if (state.paymentHistory.wallet) {
+      summary.textContent = `Wallet scope ${shortAddress(state.paymentHistory.wallet)} • ${historyRecords.length} payment record${historyRecords.length === 1 ? "" : "s"} synced`;
+    } else {
+      summary.textContent = "Connect a wallet to load settled payments from the live payment ledger.";
+    }
+  }
+
+  if (!mergedEntries.length) {
     list.innerHTML = `
       <div class="activity-item activity-item-empty">
         <div class="activity-icon received">
@@ -2712,7 +2911,11 @@ function renderActivityList() {
         <div class="activity-details">
           <div class="activity-title">No live confirmations yet</div>
           <div class="activity-meta">
-            <span class="activity-time">Sync manifest and send the first action from this app.</span>
+            <span class="activity-time">${
+              state.paymentHistory.wallet
+                ? "Send the first payment or private action from this app."
+                : "Connect a wallet, sync manifest, and send the first action from this app."
+            }</span>
           </div>
         </div>
         <div class="activity-amount neutral">
@@ -2724,16 +2927,28 @@ function renderActivityList() {
     return;
   }
 
-  list.innerHTML = state.recentActivity
+  list.innerHTML = mergedEntries
     .map((entry) => {
       const canFocusInvoice = Boolean(entry.identifiers?.invoiceId);
+      const canOpenUrl = Boolean(entry.explorerUrl);
       const addressLabel =
-        entry.identifiers?.invoiceId || entry.identifiers?.paymentId || entry.hash || "";
+        entry.identifiers?.invoiceId ||
+        entry.identifiers?.requestId ||
+        entry.identifiers?.paymentId ||
+        entry.hash ||
+        "";
+      const clickAttrs = canFocusInvoice
+        ? `data-select-invoice="${escapeHtml(entry.identifiers.invoiceId)}"`
+        : canOpenUrl
+          ? `data-open-url="${escapeHtml(entry.explorerUrl)}"`
+          : "";
+      const clickClass = canFocusInvoice || canOpenUrl ? "is-clickable" : "";
+      const metaLabel = entry.metaLabel
+        ? `<span class="activity-dot">•</span><span class="activity-tag">${escapeHtml(entry.metaLabel)}</span>`
+        : "";
 
       return `
-        <div class="activity-item ${canFocusInvoice ? "is-clickable" : ""}" ${
-          canFocusInvoice ? `data-select-invoice="${escapeHtml(entry.identifiers.invoiceId)}"` : ""
-        }>
+        <div class="activity-item ${clickClass}" ${clickAttrs}>
           <div class="activity-icon ${escapeHtml(entry.direction || "neutral")}">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
               ${
@@ -2751,6 +2966,7 @@ function renderActivityList() {
               <span class="activity-time">${escapeHtml(formatRelativeTime(entry.confirmedAt))}</span>
               <span class="activity-dot">•</span>
               <span class="activity-address">${escapeHtml(maskTrace(addressLabel))}</span>
+              ${metaLabel}
             </div>
           </div>
           <div class="activity-amount ${escapeHtml(entry.direction || "neutral")}">
@@ -2976,6 +3192,9 @@ function bindEvents() {
     if (viewTrigger) {
       event.preventDefault();
       setActiveView(viewTrigger.dataset.viewTarget);
+      if (normalizeView(viewTrigger.dataset.viewTarget) === "activity") {
+        syncPaymentHistory({ silent: true }).then(() => render());
+      }
       render();
       return;
     }
@@ -2988,6 +3207,9 @@ function bindEvents() {
       if (APP_VIEWS.has(view)) {
         event.preventDefault();
         setActiveView(view);
+        if (view === "activity") {
+          syncPaymentHistory({ silent: true }).then(() => render());
+        }
         render();
       }
       return;
@@ -2999,6 +3221,16 @@ function bindEvents() {
       state.forms.monitorInvoice.invoiceId = invoiceFocus.dataset.selectInvoice;
       setActiveView("invoices");
       render();
+      return;
+    }
+
+    const explorerFocus = event.target.closest("[data-open-url]");
+
+    if (explorerFocus) {
+      const targetUrl = explorerFocus.dataset.openUrl;
+      if (targetUrl) {
+        window.open(targetUrl, "_blank", "noopener,noreferrer");
+      }
       return;
     }
 
@@ -3020,6 +3252,9 @@ function bindEvents() {
 
   window.addEventListener("hashchange", () => {
     setActiveView(window.location.hash, { updateHash: false, scrollTop: false });
+    if (normalizeView(window.location.hash) === "activity") {
+      syncPaymentHistory({ silent: true }).then(() => render());
+    }
     render();
   });
 

@@ -107,6 +107,7 @@ function createPaymentIntentService(options = {}) {
   const executionDedupeStore =
     options.executionDedupeStore || createMemoryExecutionDedupeStore();
   const executor = options.executor;
+  const paymentLedger = options.paymentLedger || null;
   const domain = buildIntentDomain({
     chainId: options.chainId,
     verifyingContract: options.verifyingContract,
@@ -140,7 +141,7 @@ function createPaymentIntentService(options = {}) {
       expiresAt,
     });
 
-    return {
+    const challengeRecord = {
       challengeId: challengeToken,
       requestId: input.requestId,
       receiptId: input.receiptId,
@@ -155,6 +156,12 @@ function createPaymentIntentService(options = {}) {
       expiresAtMs: expiresAt,
       domain,
     };
+
+    if (paymentLedger?.rememberChallenge) {
+      await Promise.resolve(paymentLedger.rememberChallenge(challengeRecord));
+    }
+
+    return challengeRecord;
   }
 
   async function executeSignedIntent({ intent, signature }) {
@@ -194,7 +201,23 @@ function createPaymentIntentService(options = {}) {
     if (await executionDedupeStore.has(dedupeKey)) {
       const error = new Error("Duplicate execution.");
       error.code = "duplicate_execution";
+      if (paymentLedger?.getByRequestId) {
+        error.details = {
+          existingRecord: await Promise.resolve(paymentLedger.getByRequestId(intent.requestId)),
+        };
+      }
       throw error;
+    }
+
+    if (paymentLedger?.markSigned) {
+      await Promise.resolve(
+        paymentLedger.markSigned(intent, {
+          signer: signatureResult.signer,
+          intentHash: signatureResult.intentHash,
+          requestIdHash: hashRequestId(intent.requestId),
+          signedAt: now,
+        }),
+      );
     }
 
     const consumeContext = {
@@ -219,9 +242,30 @@ function createPaymentIntentService(options = {}) {
     const intentHash = signatureResult.intentHash;
     const requestIdHash = hashRequestId(intent.requestId);
 
+    if (paymentLedger?.markExecuting) {
+      await Promise.resolve(
+        paymentLedger.markExecuting(intent, {
+          signer: signatureResult.signer,
+          intentHash,
+          requestIdHash,
+          executingAt: nowMs(),
+        }),
+      );
+    }
+
     if (!executor) {
       const error = new Error("No executor configured.");
       error.code = "executor_missing";
+      if (paymentLedger?.markFailed) {
+        await Promise.resolve(
+          paymentLedger.markFailed(intent, error, {
+            signer: signatureResult.signer,
+            intentHash,
+            requestIdHash,
+            failedAt: nowMs(),
+          }),
+        );
+      }
       throw error;
     }
 
@@ -240,6 +284,16 @@ function createPaymentIntentService(options = {}) {
       if (typeof challengeRegistry.releaseConsume === "function") {
         await challengeRegistry.releaseConsume(intent.challengeId, consumeContext).catch(() => null);
       }
+      if (paymentLedger?.markFailed) {
+        await Promise.resolve(
+          paymentLedger.markFailed(intent, error, {
+            signer: signatureResult.signer,
+            intentHash,
+            requestIdHash,
+            failedAt: nowMs(),
+          }),
+        );
+      }
       throw error;
     }
 
@@ -255,6 +309,17 @@ function createPaymentIntentService(options = {}) {
         ? await challengeRegistry.commitConsume(intent.challengeId, consumeContext)
         : reserveResult;
 
+    if (paymentLedger?.markSettled) {
+      await Promise.resolve(
+        paymentLedger.markSettled(intent, execution, {
+          signer: signatureResult.signer,
+          intentHash,
+          requestIdHash,
+          settledAt: nowMs(),
+        }),
+      );
+    }
+
     return {
       ok: true,
       status: "executed",
@@ -267,10 +332,63 @@ function createPaymentIntentService(options = {}) {
     };
   }
 
+  async function listPayments(filters = {}) {
+    if (paymentLedger?.list) {
+      return await Promise.resolve(paymentLedger.list(filters));
+    }
+
+    return {
+      status: "ok",
+      statusCode: 200,
+      filters: {
+        wallet: String(filters.wallet || ""),
+        merchant: String(filters.merchant || ""),
+        payer: String(filters.payer || ""),
+        status: String(filters.status || ""),
+        limit: Math.max(0, Number.parseInt(String(filters.limit || 0), 10) || 0),
+      },
+      summary: {
+        totalCount: 0,
+        returnedCount: 0,
+        byStatus: {},
+        updatedAt: Date.now(),
+      },
+      records: [],
+    };
+  }
+
+  async function getPaymentLedgerSnapshot({ includeRecords = false } = {}) {
+    if (paymentLedger?.snapshot) {
+      const snapshot = await Promise.resolve(paymentLedger.snapshot({ includeRecords }));
+      return {
+        ...snapshot,
+        storage:
+          typeof paymentLedger.describe === "function"
+            ? paymentLedger.describe()
+            : { kind: "custom" },
+      };
+    }
+
+    return {
+      status: "ok",
+      statusCode: 200,
+      summary: {
+        totalCount: 0,
+        returnedCount: 0,
+        byStatus: {},
+        updatedAt: Date.now(),
+      },
+      records: [],
+      storage: { kind: "memory" },
+    };
+  }
+
   return {
     domain,
     createChallenge,
     executeSignedIntent,
+    listPayments,
+    getPaymentLedgerSnapshot,
   };
 }
 

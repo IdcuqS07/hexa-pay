@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {FHE, euint64, ebool} from "@fhenixprotocol/contracts/FHE.sol";
+import {FHE, euint64, ebool} from "@fhenixprotocol/cofhe-contracts/FHE.sol";
 
 /// @title MockCreditAdapter
 /// @notice Encrypted credit management with access control

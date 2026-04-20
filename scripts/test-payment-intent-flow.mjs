@@ -197,6 +197,52 @@ async function executeIntent(intent, signature) {
   return result;
 }
 
+async function verifyApiLedger(payerAddress, merchantAddress, requestId, txHash) {
+  console.log("\n6️⃣  Verifying payment ledger API...");
+
+  const url = new URL(`${API_BASE}/api/payments/list`);
+  url.searchParams.set("wallet", payerAddress);
+  url.searchParams.set("limit", "10");
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Payment history lookup failed: ${response.status} ${response.statusText}`);
+  }
+
+  const payload = await response.json();
+  const record = Array.isArray(payload.records)
+    ? payload.records.find((entry) => entry.requestId === requestId)
+    : null;
+
+  if (!record) {
+    throw new Error(`Payment history record not found for requestId ${requestId}`);
+  }
+
+  if (String(record.status) !== "settled") {
+    throw new Error(`Payment history record has unexpected status ${record.status}`);
+  }
+
+  if (String(record.txHash || "").toLowerCase() !== String(txHash || "").toLowerCase()) {
+    throw new Error(`Payment history txHash mismatch for requestId ${requestId}`);
+  }
+
+  if (String(record.payer || "").toLowerCase() !== String(payerAddress || "").toLowerCase()) {
+    throw new Error(`Payment history payer mismatch for requestId ${requestId}`);
+  }
+
+  if (String(record.merchant || "").toLowerCase() !== String(merchantAddress || "").toLowerCase()) {
+    throw new Error(`Payment history merchant mismatch for requestId ${requestId}`);
+  }
+
+  console.log("✅ Payment history API contains settled record");
+}
+
 async function verifyOnchain(intentHash, txHash) {
   console.log("\n5️⃣  Verifying onchain execution...");
   
@@ -285,6 +331,9 @@ async function main() {
 
     // Step 6: Verify onchain
     await verifyOnchain(result.intentHash, result.txHash);
+
+    // Step 7: Verify API ledger
+    await verifyApiLedger(intent.payer, intent.merchant, intent.requestId, result.txHash);
 
     console.log("\n✅ Full flow completed successfully!");
     

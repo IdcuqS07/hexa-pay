@@ -1046,6 +1046,7 @@ button {
 .activity-meta {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-xs);
   font-size: 0.8125rem;
   color: var(--color-text-tertiary);
@@ -1057,6 +1058,18 @@ button {
 
 .activity-address {
   font-family: var(--font-mono);
+}
+
+.activity-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--color-border);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .activity-amount {

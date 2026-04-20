@@ -25,6 +25,7 @@ Repo ini sekarang memakai folder `docs/` untuk menampung dokumen yang sifatnya r
 - [FAUCET_GUIDE.md](./guides/FAUCET_GUIDE.md)
 - [FOUNDRY_INTEGRATION.md](./guides/FOUNDRY_INTEGRATION.md)
 - [FOUNDRY_SETUP.md](./guides/FOUNDRY_SETUP.md)
+- [GLOBAL_DEVELOPER_ROADMAP.md](./guides/GLOBAL_DEVELOPER_ROADMAP.md)
 - [PAYMENT_INTENT_QUICKSTART.md](./guides/PAYMENT_INTENT_QUICKSTART.md)
 - [QUICKSTART.md](./guides/QUICKSTART.md)
 - [SEPOLIA_DEPLOYMENT_GUIDE.md](./guides/SEPOLIA_DEPLOYMENT_GUIDE.md)
