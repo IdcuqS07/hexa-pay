@@ -2,6 +2,7 @@ export const PRIVATE_QUOTE_STORE_MODE_STORAGE_KEY = "pq.storeMode";
 export const PRIVATE_QUOTE_STORE_MODES = ["local", "mock-registry", "mock-api"];
 export const PRIVATE_QUOTE_PHASE_LABEL = "Bootstrap";
 export const DEFAULT_LIVE_PRIVATE_QUOTE_STORE_MODE = "mock-api";
+let forceLivePrivateQuoteStoreMode = false;
 
 export function isLocalDevelopmentHost() {
   if (typeof window === "undefined") {
@@ -18,10 +19,18 @@ export function isLocalDevelopmentHost() {
 }
 
 export function isPrivateQuoteDevControlsEnabled() {
+  if (forceLivePrivateQuoteStoreMode) {
+    return false;
+  }
+
   return (
     String(import.meta.env.VITE_ENABLE_PRIVATE_QUOTE_DEV_MODE || "") === "1" ||
     isLocalDevelopmentHost()
   );
+}
+
+export function setPrivateQuoteLiveModeOverride(forceLive = false) {
+  forceLivePrivateQuoteStoreMode = Boolean(forceLive);
 }
 
 export function getDefaultPrivateQuoteStoreMode() {

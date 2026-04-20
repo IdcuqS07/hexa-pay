@@ -617,6 +617,14 @@ export function mountPaymentIntentWidget(container, options = {}) {
 
   let walletEventsBound = false;
 
+  function getSessionWalletAddress() {
+    return String(options.connectedWalletAddress || "");
+  }
+
+  function isWalletSessionActive() {
+    return Boolean(options.walletSessionActive);
+  }
+
   function renderConnectedWallet(address = "") {
     if (!connectedWalletHint) {
       return;
@@ -628,6 +636,17 @@ export function mountPaymentIntentWidget(container, options = {}) {
   }
 
   async function refreshConnectedWallet() {
+    if (!isWalletSessionActive()) {
+      renderConnectedWallet("");
+      return;
+    }
+
+    const controlledAddress = getSessionWalletAddress();
+    if (controlledAddress) {
+      renderConnectedWallet(controlledAddress);
+      return;
+    }
+
     if (!window.ethereum) {
       renderConnectedWallet("");
       return;
@@ -733,7 +752,9 @@ export function mountPaymentIntentWidget(container, options = {}) {
       await ensureArbSepolia();
       const { address: payer } = await getSignerAndAddress();
       outputs.payer.textContent = shortHash(payer);
-      renderConnectedWallet(payer);
+      if (isWalletSessionActive()) {
+        renderConnectedWallet(payer);
+      }
 
       const requestId = createRequestId();
       outputs.requestId.textContent = shortHash(requestId);
@@ -879,6 +900,10 @@ export function mountPaymentIntentWidget(container, options = {}) {
   executeBtn.addEventListener("click", handleExecute);
 
   return {
+    update(nextOptions = {}) {
+      Object.assign(options, nextOptions);
+      refreshConnectedWallet();
+    },
     destroy() {
       if (walletEventsBound && window.ethereum?.removeListener) {
         window.ethereum.removeListener("accountsChanged", handleWalletStateChange);

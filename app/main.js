@@ -50,6 +50,7 @@ import {
   getPrivateQuoteStoreMode,
   isPrivateQuoteDevControlsEnabled,
   getPrivateQuoteStoreModeLabel,
+  setPrivateQuoteLiveModeOverride,
   setPrivateQuoteStoreMode,
   PRIVATE_QUOTE_STORE_MODE_STORAGE_KEY,
 } from "./config.js";
@@ -687,6 +688,20 @@ function formatTimestamp(timestamp) {
 
 async function syncPrivateQuoteConfig({ refresh = false } = {}) {
   state.privateQuoteConfig = await loadPrivateQuoteConfig({ refresh });
+
+  const forceLiveReceiptSource =
+    !state.privateQuoteConfig?.isFallback &&
+    !state.privateQuoteConfig?.isLiveMisconfigured &&
+    Boolean(state.privateQuoteConfig?.address) &&
+    String(state.privateQuoteConfig?.chainId || "") !== "31337";
+
+  setPrivateQuoteLiveModeOverride(forceLiveReceiptSource);
+
+  const normalizedStoreMode = getPrivateQuoteStoreMode();
+  if (forceLiveReceiptSource || normalizedStoreMode !== receiptStoreMode) {
+    await syncReceiptStoreMode(normalizedStoreMode, { syncUrl: forceLiveReceiptSource });
+  }
+
   return state.privateQuoteConfig;
 }
 
@@ -2029,6 +2044,40 @@ function getBalanceCopy() {
   };
 }
 
+function getPrivateLaneStatus() {
+  if (!state.manifest) {
+    return "Manifest pending";
+  }
+
+  if (state.privateQuoteConfig?.isLiveMisconfigured) {
+    return "Manifest mismatch";
+  }
+
+  if (state.privateQuoteConfig && !state.privateQuoteConfig.address) {
+    return "Quote config pending";
+  }
+
+  if (!state.runtime.connected) {
+    return "Live config";
+  }
+
+  const expectedChainId = state.privateQuoteConfig?.chainId || state.selectedChainId;
+
+  if (state.runtime.chainId !== expectedChainId) {
+    return "Switch network";
+  }
+
+  if (state.fhenix.mode === "ready") {
+    return "CoFHE ready";
+  }
+
+  if (state.fhenix.mode === "preview") {
+    return "Preview only";
+  }
+
+  return "Wallet ready";
+}
+
 function renderToolbar() {
   const walletCta = document.querySelector("[data-wallet-cta]");
   const switchChainButton = document.querySelector("[data-switch-chain]");
@@ -2042,12 +2091,7 @@ function renderToolbar() {
   const profileButton = document.querySelector(".profile-btn");
   const selectedChain = getChainMetadata(state.selectedChainId);
   const manifestLabel = state.manifest ? "Manifest synced" : "Manifest pending";
-  const fhenixLabel =
-    state.fhenix.mode === "ready"
-      ? "CoFHE ready"
-      : state.fhenix.mode === "preview"
-        ? "Preview only"
-        : "Offline";
+  const privateLaneStatus = getPrivateLaneStatus();
 
   noticeSummary.textContent = state.notice.summary;
   noticeSummary.classList.toggle("is-good", state.notice.tone === "good");
@@ -2056,9 +2100,9 @@ function renderToolbar() {
 
   chainPill.textContent = selectedChain.shortLabel;
   manifestPill.textContent = manifestLabel;
-  fhenixPill.textContent = fhenixLabel;
+  fhenixPill.textContent = privateLaneStatus;
 
-  privacyStatus.textContent = fhenixLabel;
+  privacyStatus.textContent = privateLaneStatus;
   walletAvatar.textContent = state.runtime.connected
     ? (state.runtime.walletName || "W").slice(0, 2).toUpperCase()
     : "HX";
@@ -2209,46 +2253,53 @@ function renderPaymentIntentWidget() {
 
   container.style.display = "block";
 
+  const widgetOptions = {
+    permitHash: "",
+    sessionId: "sess_hexapay_ui",
+    deviceFingerprintHash: "dev_hexapay_hash",
+    currency: "USDC",
+    amount: "",
+    executorAddress: import.meta.env.VITE_HEXAPAY_EXECUTOR_CONTRACT || "",
+    connectedWalletAddress: state.runtime.connected ? state.runtime.account : "",
+    walletSessionActive: state.runtime.connected,
+    onSuccess: (result) => {
+      console.log("Payment executed successfully:", result);
+      // Optionally refresh app state or record activity
+      recordRecentActivity(
+        "Payment executed",
+        "Payments",
+        {
+          hash: result.txHash,
+          blockNumber: result.blockNumber,
+          explorerUrl: `https://sepolia.arbiscan.io/tx/${result.txHash}`,
+          identifiers: {
+            requestId: result.requestId,
+            challengeId: result.challengeId,
+          },
+        },
+        {
+          amountDisplay: "LIVE",
+          currency: "PAYMENT",
+          direction: "neutral",
+          subtitle: `Request ${result.requestId.slice(0, 16)}...`,
+        }
+      );
+      syncPaymentHistory({ silent: true }).then(() => render());
+      render();
+    },
+    onError: (error) => {
+      console.error("Payment execution failed:", error);
+    },
+  };
+
   // Mount widget if not already mounted
   if (!container.dataset.mounted) {
-    mountPaymentIntentWidget(container, {
-      permitHash: "",
-      sessionId: "sess_hexapay_ui",
-      deviceFingerprintHash: "dev_hexapay_hash",
-      currency: "USDC",
-      amount: "",
-      executorAddress: import.meta.env.VITE_HEXAPAY_EXECUTOR_CONTRACT || "",
-      onSuccess: (result) => {
-        console.log("Payment executed successfully:", result);
-        // Optionally refresh app state or record activity
-        recordRecentActivity(
-          "Payment executed",
-          "Payments",
-          {
-            hash: result.txHash,
-            blockNumber: result.blockNumber,
-            explorerUrl: `https://sepolia.arbiscan.io/tx/${result.txHash}`,
-            identifiers: {
-              requestId: result.requestId,
-              challengeId: result.challengeId,
-            },
-          },
-          {
-            amountDisplay: "LIVE",
-            currency: "PAYMENT",
-            direction: "neutral",
-            subtitle: `Request ${result.requestId.slice(0, 16)}...`,
-          }
-        );
-        syncPaymentHistory({ silent: true }).then(() => render());
-        render();
-      },
-      onError: (error) => {
-        console.error("Payment execution failed:", error);
-      },
-    });
+    container.__paymentIntentWidget = mountPaymentIntentWidget(container, widgetOptions);
     container.dataset.mounted = "true";
+    return;
   }
+
+  container.__paymentIntentWidget?.update?.(widgetOptions);
 }
 
 function renderPrivateQuoteSummary() {
@@ -2294,7 +2345,7 @@ function renderPrivateQuoteSummary() {
     : "Wallet offline";
   const moduleChain = config ? getChainMetadata(config.chainId).shortLabel : "Loading";
   const storeModeLabel = getPrivateQuoteStoreModeLabel(receiptStoreMode);
-  const showDevControls = isPrivateQuoteDevControlsEnabled();
+  const showDevControls = Boolean(config) && isPrivateQuoteDevControlsEnabled();
 
   if (!config) {
     helper.textContent = "Loading private quote module config...";
@@ -2302,7 +2353,7 @@ function renderPrivateQuoteSummary() {
     helper.textContent =
       "Live private quote manifest still points to localhost. Update public/deployment-private-quote.json to the Arbitrum Sepolia contract before using this surface.";
   } else if (!state.runtime.connected) {
-    helper.textContent = `Connect a wallet first. Private quote module is configured on ${moduleChain}.`;
+    helper.textContent = `Live private quote contract detected on ${moduleChain}. Connect a wallet to create a private quote.`;
   } else if (state.runtime.chainId !== config.chainId) {
     helper.textContent = `Wallet is on ${walletChain}. Switch to ${moduleChain} to create a private quote.`;
   } else {
@@ -2348,7 +2399,7 @@ function renderPrivateQuoteSummary() {
     storeModeField.disabled = state.busyAction !== "" || state.busyCommand !== "";
   }
   if (storeModeFieldWrapper) {
-    storeModeFieldWrapper.hidden = !showDevControls;
+    storeModeFieldWrapper.hidden = !config || !showDevControls;
   }
 
   resultCard.hidden = !latestQuote;
@@ -3276,7 +3327,6 @@ function bindEvents() {
 
 async function bootstrap() {
   state.recentActivity = loadRecentActivity();
-  await syncReceiptStoreMode(getPrivateQuoteStoreMode(), { syncUrl: false });
   render();
   bindEvents();
   await bootstrapManifest();
