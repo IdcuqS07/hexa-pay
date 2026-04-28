@@ -23,10 +23,15 @@ contract HexaPayWorkflowModule {
     error InvalidApprovals();
     error InvalidCore();
     error InvalidDueDate();
+    error InvalidExternalSettlement();
+    error InvalidExternalSettlementAmount();
+    error InvalidExternalSettlementBridge();
     error InvalidFrequency();
     error InvalidEmployee();
     error InvalidPayer();
     error InvalidSigner();
+    error ExternalSettlementAlreadyApplied();
+    error ExternalSettlementAlreadyRecorded();
     error InvoiceAlreadyFunded();
     error InvoiceNotCancellable();
     error InvoiceNotEditable();
@@ -38,8 +43,10 @@ contract HexaPayWorkflowModule {
     error NoInvoiceAccess();
     error NoLineItems();
     error NoPayrollAccess();
+    error NotCoreOwner();
     error NotCompanyOperator();
     error NotCompanyOwner();
+    error NotExternalSettlementBridge();
     error NotInvoiceOperator();
     error NotInvoicePayer();
     error NotPolicySigner();
@@ -51,6 +58,7 @@ contract HexaPayWorkflowModule {
     error ScheduleNotActive();
     error SignerNotApproved();
     error UnknownAction();
+    error UnknownExternalSettlement();
     error UnknownInvoice();
     error UnknownSchedule();
     error UnsupportedAction();
@@ -119,6 +127,23 @@ contract HexaPayWorkflowModule {
         bool active;
     }
 
+    struct ExternalSettlementReceipt {
+        bytes32 settlementId;
+        bytes32 invoiceId;
+        bytes32 intentHash;
+        bytes32 requestIdHash;
+        bytes32 txHash;
+        address payerWallet;
+        address merchant;
+        address token;
+        uint128 observedAmount;
+        uint128 appliedAmount;
+        uint64 recordedAt;
+        uint64 appliedAt;
+        bool applied;
+        bool exists;
+    }
+
     IHexaPayCore public immutable core;
     address private immutable writeDelegate;
 
@@ -141,6 +166,9 @@ contract HexaPayWorkflowModule {
 
     mapping(bytes32 => PayrollSchedule) private payrollSchedules;
     mapping(address => bytes32[]) private employerSchedules;
+    address public externalSettlementBridge;
+    mapping(bytes32 => ExternalSettlementReceipt) private externalSettlementReceipts;
+    mapping(bytes32 => bytes32[]) private invoiceExternalSettlementIds;
 
     uint256 private scheduleNonce;
     uint256 private invoiceNonce;
@@ -159,6 +187,22 @@ contract HexaPayWorkflowModule {
     event InvoiceCancelled(bytes32 indexed invoiceId);
     event InvoiceLineItemsAdded(bytes32 indexed invoiceId, uint256 itemCount);
     event InvoicePaymentApplied(bytes32 indexed invoiceId, bytes32 indexed paymentId, uint32 paymentCount);
+    event ExternalSettlementBridgeUpdated(address indexed previousBridge, address indexed nextBridge);
+    event InvoiceExternalSettlementReceiptRecorded(
+        bytes32 indexed invoiceId,
+        bytes32 indexed settlementId,
+        bytes32 indexed intentHash,
+        bytes32 requestIdHash,
+        bytes32 txHash,
+        address payerWallet,
+        uint256 observedAmount
+    );
+    event InvoiceExternalSettlementApplied(
+        bytes32 indexed invoiceId,
+        bytes32 indexed settlementId,
+        uint256 appliedAmount,
+        address indexed operator
+    );
     event PolicyRuleUpdated(
         address indexed company,
         PolicyActionType actionType,
@@ -306,6 +350,43 @@ contract HexaPayWorkflowModule {
         return abi.decode(_delegateWriteCall(), (bytes32));
     }
 
+    function setExternalSettlementBridge(address bridge) external {
+        bridge;
+        _delegateWriteCall();
+    }
+
+    function recordExternalSettlementReceipt(
+        bytes32 invoiceId,
+        bytes32 settlementId,
+        bytes32 intentHash,
+        bytes32 requestIdHash,
+        bytes32 txHash,
+        address payerWallet,
+        address merchant,
+        address token,
+        uint128 observedAmount
+    ) external {
+        invoiceId;
+        settlementId;
+        intentHash;
+        requestIdHash;
+        txHash;
+        payerWallet;
+        merchant;
+        token;
+        observedAmount;
+        _delegateWriteCall();
+    }
+
+    function applyExternalSettlementReceipt(bytes32 settlementId, uint128 clearAmount)
+        external
+        returns (bytes32 invoiceId)
+    {
+        settlementId;
+        clearAmount;
+        return abi.decode(_delegateWriteCall(), (bytes32));
+    }
+
     function getInvoice(bytes32 invoiceId)
         external
         view
@@ -340,6 +421,27 @@ contract HexaPayWorkflowModule {
         if (!invoices[invoiceId].exists) revert UnknownInvoice();
         if (!_canViewInvoice(invoiceId, msg.sender)) revert NoInvoiceAccess();
         return invoicePayments[invoiceId];
+    }
+
+    function getInvoiceExternalSettlementIds(bytes32 invoiceId)
+        external
+        view
+        returns (bytes32[] memory)
+    {
+        if (!invoices[invoiceId].exists) revert UnknownInvoice();
+        if (!_canViewInvoice(invoiceId, msg.sender)) revert NoInvoiceAccess();
+        return invoiceExternalSettlementIds[invoiceId];
+    }
+
+    function getExternalSettlementReceipt(bytes32 settlementId)
+        external
+        view
+        returns (ExternalSettlementReceipt memory receipt)
+    {
+        ExternalSettlementReceipt storage storedReceipt = externalSettlementReceipts[settlementId];
+        if (!storedReceipt.exists) revert UnknownExternalSettlement();
+        if (!_canViewInvoice(storedReceipt.invoiceId, msg.sender)) revert NoInvoiceAccess();
+        return storedReceipt;
     }
 
     function getCompanyInvoices(address company) external view returns (bytes32[] memory) {

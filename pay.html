@@ -43,12 +43,12 @@
       <section class="operation-card panel-shell">
         <div class="operation-head">
           <div>
-            <span class="operation-kicker">Private Quote</span>
-            <h2>Payment details</h2>
+            <span class="operation-kicker" data-pay-kicker>Private Quote</span>
+            <h2 data-pay-heading>Payment details</h2>
           </div>
-          <span class="operation-pill">Payer</span>
+          <span class="operation-pill" data-pay-pill>Payer</span>
         </div>
-        <p class="operation-copy">
+        <p class="operation-copy" data-pay-copy>
           This page reuses the HexaPay wallet flow and theme, but only exposes the minimum quote metadata needed to settle the payment.
         </p>
         <div class="helper-line" data-pay-route>
@@ -68,6 +68,22 @@
           <button class="toolbar-btn primary" type="button" data-command="pay-quote">
             Pay Now
           </button>
+        </div>
+
+        <div class="pay-intent-shell" data-pay-intent-shell hidden>
+          <div class="summary-list" data-pay-intent-summary>
+            <div class="summary-row">
+              <span>Status</span>
+              <strong>Loading payment request</strong>
+            </div>
+          </div>
+          <div class="summary-list reconciliation-detail" data-pay-reconciliation-detail hidden>
+            <div class="summary-row">
+              <span>Reconciliation</span>
+              <strong>Waiting for invoice-linked settlement</strong>
+            </div>
+          </div>
+          <div data-pay-intent-widget></div>
         </div>
 
         <div class="pq-notice" data-pay-quote-notice hidden>

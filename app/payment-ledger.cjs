@@ -5,6 +5,11 @@ const {
 } = require("./mock-receipt-state-store.cjs");
 const { createLazySharedInstance } = require('./lazy-shared-instance.cjs');
 const { RedisJsonStateStore } = require("./mock-receipt-redis-state-store.cjs");
+const {
+  describeInvoiceIntentBinding,
+  describeInvoiceReconciliationCandidate,
+  normalizeCanonicalInvoiceId,
+} = require("./payment-intent-invoice-binding.cjs");
 
 const PAYMENT_LEDGER_VERSION = 1;
 const DEFAULT_PAYMENT_LEDGER_MODE = "file";
@@ -104,12 +109,24 @@ function normalizeLifecycleTimestamps(value = {}) {
 
 function normalizeRecord(record = {}) {
   const lifecycle = normalizeLifecycleTimestamps(record.lifecycle);
+  const invoiceBinding = describeInvoiceIntentBinding(record);
+  const invoiceBindingStatus = invoiceBinding.invalidInvoiceId
+    ? "invalid_invoice_id"
+    : invoiceBinding.mismatch
+      ? "invoice_receipt_mismatch"
+      : invoiceBinding.invoiceLinked
+        ? "canonical"
+        : "none";
 
   return {
     source: "payment-intent",
     requestId: normalizeString(record.requestId),
     challengeId: normalizeString(record.challengeId),
-    receiptId: normalizeString(record.receiptId),
+    receiptId: invoiceBinding.receiptId,
+    invoiceId: invoiceBinding.invoiceId,
+    invoiceLinked: invoiceBinding.invoiceLinked,
+    invoiceBindingSource: normalizeString(record.invoiceBindingSource || invoiceBinding.bindingSource),
+    invoiceBindingStatus,
     quoteId: normalizeString(record.quoteId),
     merchantId: normalizeString(record.merchantId),
     terminalId: normalizeString(record.terminalId),
@@ -125,6 +142,11 @@ function normalizeRecord(record = {}) {
     txHash: normalizeString(record.txHash),
     blockNumber: normalizePositiveInteger(record.blockNumber, 0),
     status: normalizeString(record.status || "challenge"),
+    reconciliationStatus: normalizeString(record.reconciliationStatus),
+    reconciliationReason: normalizeString(record.reconciliationReason),
+    settlementId: normalizeString(record.settlementId),
+    reconciliationRecordedAt: normalizePositiveInteger(record.reconciliationRecordedAt, 0),
+    reconciliationAppliedAt: normalizePositiveInteger(record.reconciliationAppliedAt, 0),
     errorCode: normalizeString(record.errorCode),
     errorMessage: normalizeString(record.errorMessage),
     createdAt: normalizePositiveInteger(record.createdAt, lifecycle.challengeAt || nowMs()),
@@ -251,6 +273,16 @@ function matchesStatus(record, status) {
   return normalizeString(record.status) === normalizeString(status);
 }
 
+function matchesInvoiceId(record, invoiceId) {
+  if (!invoiceId) return true;
+  const needle = normalizeCanonicalInvoiceId(invoiceId);
+  if (!needle) {
+    return false;
+  }
+
+  return normalizeLowerString(record.invoiceId) === normalizeLowerString(needle);
+}
+
 class MemoryPaymentLedger {
   constructor({ records, stats } = {}) {
     this.records = records instanceof Map ? records : new Map();
@@ -299,6 +331,7 @@ class MemoryPaymentLedger {
     return this.upsertRecord(challenge.requestId, {
       challengeId: challenge.challengeId,
       receiptId: challenge.receiptId,
+      invoiceId: challenge.invoiceId,
       quoteId: challenge.quoteId,
       merchantId: challenge.merchantId,
       terminalId: challenge.terminalId,
@@ -318,6 +351,7 @@ class MemoryPaymentLedger {
     return this.upsertRecord(intent.requestId, {
       challengeId: intent.challengeId,
       receiptId: intent.receiptId,
+      invoiceId: details.invoiceId,
       quoteId: intent.quoteId,
       merchantId: intent.merchantId,
       terminalId: intent.terminalId,
@@ -342,6 +376,7 @@ class MemoryPaymentLedger {
     return this.upsertRecord(intent.requestId, {
       challengeId: intent.challengeId,
       receiptId: intent.receiptId,
+      invoiceId: details.invoiceId,
       quoteId: intent.quoteId,
       merchantId: intent.merchantId,
       terminalId: intent.terminalId,
@@ -366,6 +401,7 @@ class MemoryPaymentLedger {
     return this.upsertRecord(intent.requestId, {
       challengeId: intent.challengeId,
       receiptId: intent.receiptId,
+      invoiceId: details.invoiceId,
       quoteId: intent.quoteId,
       merchantId: intent.merchantId,
       terminalId: intent.terminalId,
@@ -394,6 +430,7 @@ class MemoryPaymentLedger {
     return this.upsertRecord(intent.requestId, {
       challengeId: intent.challengeId,
       receiptId: intent.receiptId,
+      invoiceId: details.invoiceId,
       quoteId: intent.quoteId,
       merchantId: intent.merchantId,
       terminalId: intent.terminalId,
@@ -416,6 +453,17 @@ class MemoryPaymentLedger {
     });
   }
 
+  markReconciliationState(requestId, details = {}) {
+    return this.upsertRecord(requestId, {
+      reconciliationStatus: details.status,
+      reconciliationReason: details.reason,
+      settlementId: details.settlementId,
+      reconciliationRecordedAt: Number(details.recordedAt || 0),
+      reconciliationAppliedAt: Number(details.appliedAt || 0),
+      updatedAt: Number(details.updatedAt || nowMs()),
+    });
+  }
+
   getByRequestId(requestId) {
     const record = this.records.get(normalizeString(requestId).trim()) || null;
     return record ? cloneJsonValue(record) : null;
@@ -427,7 +475,8 @@ class MemoryPaymentLedger {
         matchesWallet(record, filters.wallet) &&
         matchesMerchant(record, filters.merchant) &&
         matchesPayer(record, filters.payer) &&
-        matchesStatus(record, filters.status)
+        matchesStatus(record, filters.status) &&
+        matchesInvoiceId(record, filters.invoiceId)
       );
     });
 
@@ -442,12 +491,72 @@ class MemoryPaymentLedger {
         merchant: normalizeString(filters.merchant),
         payer: normalizeString(filters.payer),
         status: normalizeString(filters.status),
+        invoiceId: normalizeCanonicalInvoiceId(filters.invoiceId),
         limit,
       },
       summary: {
         totalCount: allRecords.length,
         returnedCount: records.length,
         byStatus: buildStatusSummary(allRecords),
+        updatedAt: nowMs(),
+      },
+      records: records.map((record) => cloneJsonValue(record)),
+    };
+  }
+
+  listReconciliationCandidates(filters = {}) {
+    const eligibleOnly = filters.eligibleOnly !== false;
+    const allInvoiceLinkedRecords = toSortedRecordList(this.records)
+      .map((record) => {
+        const candidate = describeInvoiceReconciliationCandidate(record);
+        return {
+          requestId: record.requestId,
+          challengeId: record.challengeId,
+          receiptId: candidate.receiptId,
+          invoiceId: candidate.invoiceId,
+          bindingSource: candidate.bindingSource,
+          bindingStatus: record.invoiceBindingStatus,
+          eligible: candidate.eligible,
+          reason: candidate.reason,
+          status: record.status,
+          reconciliationStatus: record.reconciliationStatus,
+          settlementId: record.settlementId,
+          merchantId: record.merchantId,
+          terminalId: record.terminalId,
+          payer: record.payer,
+          merchant: record.merchant,
+          token: record.token,
+          amount: record.amount,
+          currency: record.currency,
+          intentHash: record.intentHash,
+          requestIdHash: record.requestIdHash,
+          txHash: record.txHash,
+          blockNumber: record.blockNumber,
+          settledAt: Number(record.lifecycle?.settledAt || 0),
+          updatedAt: record.updatedAt,
+        };
+      })
+      .filter((record) => record.invoiceId)
+      .filter((record) => matchesInvoiceId(record, filters.invoiceId));
+
+    const candidatePool = eligibleOnly
+      ? allInvoiceLinkedRecords.filter((record) => record.eligible)
+      : allInvoiceLinkedRecords;
+    const limit = normalizePositiveInteger(filters.limit, 0);
+    const records = limit > 0 ? candidatePool.slice(0, limit) : candidatePool;
+
+    return {
+      status: "ok",
+      statusCode: 200,
+      filters: {
+        invoiceId: normalizeCanonicalInvoiceId(filters.invoiceId),
+        limit,
+        eligibleOnly,
+      },
+      summary: {
+        totalInvoiceLinked: allInvoiceLinkedRecords.length,
+        eligibleCount: allInvoiceLinkedRecords.filter((record) => record.eligible).length,
+        returnedCount: records.length,
         updatedAt: nowMs(),
       },
       records: records.map((record) => cloneJsonValue(record)),
@@ -585,6 +694,10 @@ class StoreBackedPaymentLedger extends MemoryPaymentLedger {
     return this.mutateWithRetry(() => super.markFailed(intent, error, details));
   }
 
+  async markReconciliationState(requestId, details) {
+    return this.mutateWithRetry(() => super.markReconciliationState(requestId, details));
+  }
+
   async getByRequestId(requestId) {
     await this.hydrateFromStore();
     return super.getByRequestId(requestId);
@@ -593,6 +706,11 @@ class StoreBackedPaymentLedger extends MemoryPaymentLedger {
   async list(filters = {}) {
     await this.hydrateFromStore();
     return super.list(filters);
+  }
+
+  async listReconciliationCandidates(filters = {}) {
+    await this.hydrateFromStore();
+    return super.listReconciliationCandidates(filters);
   }
 
   async snapshot({ includeRecords = false } = {}) {

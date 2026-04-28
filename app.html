@@ -174,50 +174,94 @@
         </section>
 
         <section class="view-panel" data-view-panel="dashboard">
-          <section class="operation-card" id="company">
-            <div class="operation-head">
-              <div>
-                <span class="operation-kicker">Identity</span>
-                <h2>Register operating company</h2>
+          <section class="dashboard-actions-grid" data-dashboard-actions>
+            <button class="action-card" type="button" data-view-target="send">
+              <span class="action-card-kicker">Payment Rail</span>
+              <strong>Send Payment</strong>
+              <span class="action-card-copy">Open the live USDC execution flow and send a new payment from this dashboard.</span>
+              <span class="action-card-meta">Live settlement</span>
+            </button>
+            <button class="action-card" type="button" data-view-target="invoices">
+              <span class="action-card-kicker">Workflow</span>
+              <strong>Create Invoice</strong>
+              <span class="action-card-copy">Issue a confidential invoice, then push it into the payment rail when it is ready to collect.</span>
+              <span class="action-card-meta">Invoice to payment</span>
+            </button>
+            <button class="action-card" type="button" data-view-target="activity">
+              <span class="action-card-kicker">History</span>
+              <strong>Activity</strong>
+              <span class="action-card-copy">Review settled payments, transaction hashes, and the latest onchain confirmations.</span>
+              <span class="action-card-meta">Ledger visibility</span>
+            </button>
+          </section>
+
+          <section class="dashboard-grid">
+            <section class="operation-card" id="company">
+              <div class="operation-head">
+                <div>
+                  <span class="operation-kicker">Identity</span>
+                  <h2>Register operating company</h2>
+                </div>
+                <span class="operation-pill" data-company-pill>Setup</span>
               </div>
-              <span class="operation-pill" data-company-pill>Setup</span>
-            </div>
-            <p class="operation-copy">
-              Anchor the company identity tied to the connected wallet before issuing invoices or operating through the private workflow rail.
-            </p>
-            <div class="form-grid">
-              <label class="field">
-                <span>Company name</span>
-                <input type="text" placeholder="HexaPay Ops" data-field="registerCompany.companyName">
-              </label>
-              <label class="field">
-                <span>ENS or alias</span>
-                <input type="text" placeholder="hexapay.eth" data-field="registerCompany.ensName">
-              </label>
-              <label class="field field-full">
-                <span>Company id</span>
-                <input type="text" placeholder="HEXAPAY-001" data-field="registerCompany.companyId">
-              </label>
-            </div>
-            <div class="operation-actions">
-              <button class="toolbar-btn primary" type="button" data-action="register-company" data-company-button>
-                Register Company
-              </button>
-            </div>
-            <div class="summary-list" data-company-summary>
-              <div class="summary-row">
-                <span>Status</span>
-                <strong>Not registered yet</strong>
+              <p class="operation-copy">
+                Anchor the company identity tied to the connected wallet before issuing invoices or operating through the private workflow rail.
+              </p>
+              <div class="form-grid">
+                <label class="field">
+                  <span>Company name</span>
+                  <input type="text" placeholder="HexaPay Ops" data-field="registerCompany.companyName">
+                </label>
+                <label class="field">
+                  <span>ENS or alias</span>
+                  <input type="text" placeholder="hexapay.eth" data-field="registerCompany.ensName">
+                </label>
+                <label class="field field-full">
+                  <span>Company id</span>
+                  <input type="text" placeholder="HEXAPAY-001" data-field="registerCompany.companyId">
+                </label>
               </div>
-              <div class="summary-row">
-                <span>Signer</span>
-                <strong>Connect wallet</strong>
+              <div class="operation-actions">
+                <button class="toolbar-btn primary" type="button" data-action="register-company" data-company-button>
+                  Register Company
+                </button>
               </div>
+              <div class="summary-list" data-company-summary>
+                <div class="summary-row">
+                  <span>Status</span>
+                  <strong>Not registered yet</strong>
+                </div>
+                <div class="summary-row">
+                  <span>Signer</span>
+                  <strong>Connect wallet</strong>
+                </div>
+              </div>
+            </section>
+
+            <div class="dashboard-widget-shell">
+              <div data-payment-intent-widget></div>
             </div>
           </section>
 
-          <!-- Payment Intent Widget -->
-          <div data-payment-intent-widget></div>
+          <section class="dashboard-preview-grid">
+            <section class="operation-card dashboard-preview-card">
+              <div class="operation-head">
+                <div>
+                  <span class="operation-kicker">Activity Snapshot</span>
+                  <h2>Latest confirmed payments</h2>
+                </div>
+                <button class="text-btn" type="button" data-view-target="activity">Open Activity</button>
+              </div>
+              <p class="operation-copy">
+                Keep the most recent payment rail confirmations close to the dashboard without leaving the product workflow.
+              </p>
+              <div class="dashboard-activity-list" data-dashboard-activity-list>
+                <div class="dashboard-activity-empty">
+                  Connect a wallet and execute the first payment to populate the live activity preview.
+                </div>
+              </div>
+            </section>
+          </section>
         </section>
 
         <section class="view-panel" data-view-panel="send" hidden>
@@ -493,6 +537,26 @@
                 <strong>Reveal to inspect</strong>
               </div>
             </div>
+            <div class="helper-line" data-invoice-payment-helper>
+              Load an invoice, reveal the outstanding amount, then move it into the payment rail.
+            </div>
+            <div class="summary-list reconciliation-detail" data-invoice-reconciliation-detail hidden>
+              <div class="summary-row">
+                <span>Reconciliation</span>
+                <strong>Load an invoice to inspect reconciliation detail</strong>
+              </div>
+            </div>
+            <div class="operation-actions">
+              <button class="toolbar-btn" type="button" data-command="use-invoice-payment-rail">
+                Use in Payment Rail
+              </button>
+              <button class="toolbar-btn" type="button" data-command="copy-invoice-payment-link">
+                Copy Payment Link
+              </button>
+              <a class="toolbar-btn" data-invoice-payment-link href="/pay.html" target="_blank" rel="noreferrer">
+                Open Payment Page
+              </a>
+            </div>
           </section>
         </section>
 
@@ -529,14 +593,6 @@
             <div class="helper-line" data-private-quote-helper>
               Loading private quote module config...
             </div>
-            <label class="field pq-store-mode-field" hidden>
-              <span>Receipt Store Mode</span>
-              <select data-private-quote-store-mode>
-                <option value="local">Local</option>
-                <option value="mock-registry">Mock Registry</option>
-                <option value="mock-api">Mock API</option>
-              </select>
-            </label>
             <div class="summary-list" data-private-quote-summary>
               <div class="summary-row">
                 <span>Status</span>

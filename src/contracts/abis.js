@@ -76,6 +76,8 @@ export const CONTRACT_ABIS = {
     "function payInvoice(bytes32 invoiceId, (uint256 ctHash,uint8 securityZone,uint8 utype,bytes signature) encryptedAmount) returns (bytes32 paymentId)",
     "function setPolicyRule(address company, uint8 actionType, uint8 minApprovals, uint64 approvalTtl, bool active)",
     "function getInvoice(bytes32 invoiceId) view returns (address issuer, address payer, address company, uint64 createdAt, uint64 dueAt, bytes32 metadataHash, uint8 status, uint32 paymentCount)",
+    "function getInvoiceExternalSettlementIds(bytes32 invoiceId) view returns (bytes32[] memory)",
+    "function getExternalSettlementReceipt(bytes32 settlementId) view returns ((bytes32 settlementId, bytes32 invoiceId, bytes32 intentHash, bytes32 requestIdHash, bytes32 txHash, address payerWallet, address merchant, address token, uint128 observedAmount, uint128 appliedAmount, uint64 recordedAt, uint64 appliedAt, bool applied, bool exists) receipt)",
     "function getPolicyRule(address company, uint8 actionType) view returns (uint8 minApprovals, uint64 approvalTtl, bool active)",
     "function getSealedInvoiceAmount(bytes32 invoiceId, bytes32 publicKey) view returns (uint256)",
     "function getSealedInvoiceOutstanding(bytes32 invoiceId, bytes32 publicKey) view returns (uint256)",

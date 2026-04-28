@@ -23,6 +23,23 @@ interface IHexaPayWorkflow {
         InvoiceCancellation
     }
 
+    struct ExternalSettlementReceipt {
+        bytes32 settlementId;
+        bytes32 invoiceId;
+        bytes32 intentHash;
+        bytes32 requestIdHash;
+        bytes32 txHash;
+        address payerWallet;
+        address merchant;
+        address token;
+        uint128 observedAmount;
+        uint128 appliedAmount;
+        uint64 recordedAt;
+        uint64 appliedAt;
+        bool applied;
+        bool exists;
+    }
+
     event InvoiceCreated(
         bytes32 indexed invoiceId,
         address indexed company,
@@ -35,6 +52,25 @@ interface IHexaPayWorkflow {
     event InvoiceCancelled(bytes32 indexed invoiceId);
     event InvoiceLineItemsAdded(bytes32 indexed invoiceId, uint256 itemCount);
     event InvoicePaymentApplied(bytes32 indexed invoiceId, bytes32 indexed paymentId, uint32 paymentCount);
+    event ExternalSettlementBridgeUpdated(
+        address indexed previousBridge,
+        address indexed nextBridge
+    );
+    event InvoiceExternalSettlementReceiptRecorded(
+        bytes32 indexed invoiceId,
+        bytes32 indexed settlementId,
+        bytes32 indexed intentHash,
+        bytes32 requestIdHash,
+        bytes32 txHash,
+        address payerWallet,
+        uint256 observedAmount
+    );
+    event InvoiceExternalSettlementApplied(
+        bytes32 indexed invoiceId,
+        bytes32 indexed settlementId,
+        uint256 appliedAmount,
+        address indexed operator
+    );
     event PolicyRuleUpdated(
         address indexed company,
         PolicyActionType actionType,
@@ -88,6 +124,26 @@ interface IHexaPayWorkflow {
 
     function payInvoice(bytes32 invoiceId, InEuint128 calldata encryptedAmount) external returns (bytes32);
 
+    function externalSettlementBridge() external view returns (address);
+
+    function setExternalSettlementBridge(address bridge) external;
+
+    function recordExternalSettlementReceipt(
+        bytes32 invoiceId,
+        bytes32 settlementId,
+        bytes32 intentHash,
+        bytes32 requestIdHash,
+        bytes32 txHash,
+        address payerWallet,
+        address merchant,
+        address token,
+        uint128 observedAmount
+    ) external;
+
+    function applyExternalSettlementReceipt(bytes32 settlementId, uint128 clearAmount)
+        external
+        returns (bytes32 invoiceId);
+
     function getInvoice(bytes32 invoiceId)
         external
         view
@@ -103,6 +159,16 @@ interface IHexaPayWorkflow {
         );
 
     function getInvoicePayments(bytes32 invoiceId) external view returns (bytes32[] memory);
+
+    function getInvoiceExternalSettlementIds(bytes32 invoiceId)
+        external
+        view
+        returns (bytes32[] memory);
+
+    function getExternalSettlementReceipt(bytes32 settlementId)
+        external
+        view
+        returns (ExternalSettlementReceipt memory receipt);
 
     function getCompanyInvoices(address company) external view returns (bytes32[] memory);
 

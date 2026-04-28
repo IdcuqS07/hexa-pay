@@ -183,6 +183,23 @@ Tasks:
 - generate intent from invoice
 - mark invoice paid on success
 
+Current architecture note:
+- the live USDC executor settles with direct `transferFrom`
+- `HexaPayWorkflowModule.payInvoice` spends the confidential internal HexaPay balance rail
+- do not auto-call `payInvoice` after external rail settlement until a dedicated bridge or reconciliation path exists, otherwise the payer can be charged twice
+- Wave 3 UI may link external settlement receipts to invoices, but contract-level invoice settlement needs a separate design task
+
+Implementation order for the bridge path:
+- use `receiptId = invoiceId` as the canonical invoice binding for invoice-linked payment intents
+- add a reconciliation worker that detects settled invoice-linked rail payments from the payment ledger
+- record a verified external settlement receipt onchain first
+- require an explicit workflow apply step that updates invoice accounting without calling `payInvoice`
+- treat any external overpayment above current invoice outstanding as manual review or refund territory; do not auto-credit it into internal HexaPay balance
+- only evaluate auto-apply after invoice binding is hardened end-to-end
+
+Design reference:
+- `docs/specs/SPEC_HEXAPAY_EXTERNAL_RAIL_RECONCILIATION.md`
+
 4. Payment Link
 
 Title:
@@ -203,6 +220,11 @@ Tasks:
 - auto connect
 - auto switch chain
 - session persist
+
+Execution note:
+- land wallet continuity as a short Wave 3B UX closure pass
+- do not expand this into a wallet-system redesign before the external rail reconciliation layer is defined
+- after the UX pass, move directly into the bridge / reconciliation design needed to close invoice settlement correctness
 
 #### UI Polish
 
@@ -353,6 +375,7 @@ Title:
 - Ledger and history should be designed once with persistence expansion in mind.
 - Merchant-facing UX should not depend on dev-only mock controls once Wave 3 begins.
 - Device identity, terminal binding, and QR/NFC entry should reuse the same intent model introduced in Wave 2.
+- External USDC rail settlement and confidential workflow settlement are different ledgers today; any future bridge between them must be explicit, replay-safe, and non-duplicative.
 
 ## Recommended Folder Alignment
 

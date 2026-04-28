@@ -78,6 +78,24 @@ function shortHash(value) {
   return `${value.slice(0, 8)}...${value.slice(-6)}`;
 }
 
+function normalizeInvoiceId(value) {
+  const rawValue = String(value || "").trim();
+
+  if (!rawValue) {
+    return "";
+  }
+
+  const normalized = rawValue.startsWith("0x") || rawValue.startsWith("0X")
+    ? `0x${rawValue.slice(2)}`
+    : `0x${rawValue}`;
+
+  if (!/^0x[0-9a-fA-F]{64}$/.test(normalized)) {
+    return "";
+  }
+
+  return `0x${normalized.slice(2).toLowerCase()}`;
+}
+
 function getExplorerUrl(txHash) {
   return txHash ? `https://sepolia.arbiscan.io/tx/${txHash}` : "";
 }
@@ -650,6 +668,34 @@ export function mountPaymentIntentWidget(container, options = {}) {
   };
 
   let walletEventsBound = false;
+  let lastPrefillRevision = String(options.prefillRevision || "");
+
+  function getLinkedInvoiceId() {
+    return normalizeInvoiceId(options.linkedInvoiceId || "");
+  }
+
+  function getResolvedReceiptId() {
+    const linkedInvoiceId = getLinkedInvoiceId();
+    return linkedInvoiceId || String(fields.receiptId.value || "").trim();
+  }
+
+  function syncInvoiceBindingField() {
+    const linkedInvoiceId = getLinkedInvoiceId();
+
+    if (!fields.receiptId) {
+      return;
+    }
+
+    if (linkedInvoiceId) {
+      fields.receiptId.value = linkedInvoiceId;
+      fields.receiptId.readOnly = true;
+      fields.receiptId.title = "Locked to the linked invoice id for reconciliation safety.";
+      return;
+    }
+
+    fields.receiptId.readOnly = false;
+    fields.receiptId.removeAttribute("title");
+  }
 
   function getSessionWalletAddress() {
     return String(options.connectedWalletAddress || "");
@@ -765,12 +811,13 @@ export function mountPaymentIntentWidget(container, options = {}) {
     } else {
       fields.merchantId.value = options.merchantId || "";
       fields.terminalId.value = options.terminalId || "";
-      fields.receiptId.value = options.receiptId || "";
+      fields.receiptId.value = getLinkedInvoiceId() || options.receiptId || "";
       fields.quoteId.value = options.quoteId || "";
       fields.merchantAddress.value = options.merchantAddress || "";
       fields.amount.value = options.amount || "";
       fields.currency.value = options.currency || "USDC";
     }
+    syncInvoiceBindingField();
     outputs.payer.textContent = "-";
     outputs.requestId.textContent = "-";
     clearOutputs();
@@ -801,7 +848,8 @@ export function mountPaymentIntentWidget(container, options = {}) {
         "/api/payments/challenges",
         {
           requestId,
-          receiptId: fields.receiptId.value,
+          receiptId: getResolvedReceiptId(),
+          invoiceId: getLinkedInvoiceId(),
           quoteId: fields.quoteId.value,
           merchantId: fields.merchantId.value,
           terminalId: fields.terminalId.value,
@@ -839,7 +887,7 @@ export function mountPaymentIntentWidget(container, options = {}) {
       const intent = buildIntent({
         challengeId,
         requestId,
-        receiptId: fields.receiptId.value,
+        receiptId: getResolvedReceiptId(),
         quoteId: fields.quoteId.value,
         merchantId: fields.merchantId.value,
         terminalId: fields.terminalId.value,
@@ -906,13 +954,15 @@ export function mountPaymentIntentWidget(container, options = {}) {
           blockNumber,
           intent,
           executeResponse,
+          linkedInvoiceId: String(options.linkedInvoiceId || ""),
         });
       }
 
-      // Clear user input after success so the widget is ready for a fresh request.
-      setTimeout(() => {
-        clearFormFields();
-      }, 400);
+      if (options.clearOnSuccess !== false) {
+        setTimeout(() => {
+          clearFormFields();
+        }, 400);
+      }
     } catch (error) {
       setStatus("error");
       setBusy("Execute Payment", false);
@@ -932,11 +982,33 @@ export function mountPaymentIntentWidget(container, options = {}) {
   }
 
   executeBtn.addEventListener("click", handleExecute);
+  syncInvoiceBindingField();
 
   return {
     update(nextOptions = {}) {
+      const nextPrefillRevision = String(
+        nextOptions.prefillRevision !== undefined
+          ? nextOptions.prefillRevision
+          : options.prefillRevision || "",
+      );
+
       Object.assign(options, nextOptions);
+      if (nextPrefillRevision !== lastPrefillRevision || nextOptions.forceSyncDefaults) {
+        lastPrefillRevision = nextPrefillRevision;
+        resetForm();
+      }
       refreshConnectedWallet();
+    },
+    getFormState() {
+      return {
+        merchantId: fields.merchantId.value,
+        terminalId: fields.terminalId.value,
+        receiptId: getResolvedReceiptId(),
+        quoteId: fields.quoteId.value,
+        merchantAddress: fields.merchantAddress.value,
+        amount: fields.amount.value,
+        currency: fields.currency.value,
+      };
     },
     destroy() {
       if (walletEventsBound && window.ethereum?.removeListener) {

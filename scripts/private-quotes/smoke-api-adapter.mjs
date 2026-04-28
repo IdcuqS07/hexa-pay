@@ -13,6 +13,12 @@ import { createReceiptAccessGrantToken } from "../../app/mock-receipt-grants.cjs
 import { MockReceiptService } from "../../app/mock-receipt-service.cjs";
 import { createPaymentLedgerAdapter } from "../../app/payment-ledger.cjs";
 import {
+  createPaymentReconciliationStoreAdapter,
+} from "../../app/payment-reconciliation-store.cjs";
+import {
+  buildPaymentSettlementId,
+} from "../../app/payment-reconciliation-worker.cjs";
+import {
   FileReceiptRegistry,
   createReceiptRegistryAdapter,
 } from "../../app/mock-receipt-registry.cjs";
@@ -34,6 +40,7 @@ const MERCHANT_WALLET = new Wallet(
 const PAYER_WALLET = new Wallet(
   "0x2000000000000000000000000000000000000000000000000000000000000002",
 );
+const INVOICE_ID = `0x${"11".repeat(32)}`;
 
 const PAYMENT_INTENT_TYPES = {
   PaymentIntent: [
@@ -140,6 +147,9 @@ async function main() {
   const paymentLedgerAdapter = createPaymentLedgerAdapter({
     mode: "memory",
   });
+  const paymentReconciliationStore = createPaymentReconciliationStoreAdapter({
+    mode: "memory",
+  });
   const receiptService = new MockReceiptService({
     receiptRegistryAdapter,
     challengeRegistryAdapter,
@@ -167,6 +177,46 @@ async function main() {
       filePath: registryFilePath,
     }),
     paymentLedger: paymentLedgerAdapter,
+    paymentReconciliationStore,
+    paymentReconciliationVerifier: {
+      async verifyCandidate(candidate) {
+        return {
+          ok: true,
+          reason: "verified",
+          verificationStatus: "verified",
+          verifiedAt: Date.now(),
+          checks: {
+            executorRecord: true,
+            txSuccess: true,
+            tokenMatch: true,
+            merchantMatch: true,
+            payerMatch: true,
+            amountMatch: true,
+            invoiceContext: false,
+          },
+          metadata: {
+            candidateTxHash: candidate.txHash,
+          },
+        };
+      },
+    },
+    paymentReconciliationRecorder: {
+      async recordSettlement(candidate) {
+        return {
+          ok: true,
+          reason: "receipt_recorded",
+          settlementId: buildPaymentSettlementId({
+            chainId: Number(process.env.HEXAPAY_CHAIN_ID || 421614),
+            executorAddress: process.env.HEXAPAY_EXECUTOR_CONTRACT_ADDRESS,
+            intentHash: candidate.intentHash,
+            requestIdHash: candidate.requestIdHash,
+          }),
+          bridgeTxHash: `0x${"55".repeat(32)}`,
+          bridgeBlockNumber: 515151,
+          recordedAt: Date.now(),
+        };
+      },
+    },
     paymentExecutor: {
       async execute({ intentHash, requestIdHash, token, payer, merchant, amount }) {
         return {
@@ -440,7 +490,8 @@ async function main() {
       },
       body: JSON.stringify({
         requestId: "payment-smoke-001",
-        receiptId: "receipt-smoke-001",
+        receiptId: INVOICE_ID,
+        invoiceId: INVOICE_ID,
         quoteId: "quote-smoke-api",
         merchantId: "merchant-test-001",
         terminalId: "terminal-test-001",
@@ -516,6 +567,109 @@ async function main() {
     assert.equal(paymentListPayload.records[0].txHash, paymentExecutePayload.txHash);
     assert.equal(paymentListPayload.records[0].payer, PAYER_WALLET.address);
     assert.equal(paymentListPayload.records[0].merchant, MERCHANT_WALLET.address);
+    assert.equal(paymentListPayload.records[0].invoiceId, INVOICE_ID);
+    assert.equal(paymentListPayload.records[0].invoiceBindingStatus, "canonical");
+
+    const reconciliationCandidateResponse = await fetch(
+      `${baseUrl}/api/payments/reconciliation/candidates?limit=10`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      },
+    );
+    const reconciliationCandidatePayload = await reconciliationCandidateResponse.json();
+    assert.equal(reconciliationCandidateResponse.status, 200);
+    assert.equal(reconciliationCandidatePayload.ok, true);
+    assert.equal(reconciliationCandidatePayload.summary.eligibleCount, 1);
+    assert.equal(reconciliationCandidatePayload.records.length, 1);
+    assert.equal(reconciliationCandidatePayload.records[0].invoiceId, INVOICE_ID);
+    assert.equal(reconciliationCandidatePayload.records[0].reason, "eligible");
+    assert.equal(reconciliationCandidatePayload.records[0].txHash, paymentExecutePayload.txHash);
+
+    const settlementId = buildPaymentSettlementId({
+      chainId: Number(process.env.HEXAPAY_CHAIN_ID || 421614),
+      executorAddress: process.env.HEXAPAY_EXECUTOR_CONTRACT_ADDRESS,
+      intentHash: paymentExecutePayload.intentHash,
+      requestIdHash: paymentExecutePayload.requestIdHash,
+    });
+    const reconciliationRunResponse = await fetch(`${baseUrl}/api/payments/reconciliation/run?limit=10`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+    });
+    const reconciliationRunPayload = await reconciliationRunResponse.json();
+    assert.equal(reconciliationRunResponse.status, 200);
+    assert.equal(reconciliationRunPayload.ok, true);
+    assert.equal(reconciliationRunPayload.summary.scannedCount, 1);
+    assert.equal(reconciliationRunPayload.summary.recordedCount, 1);
+    assert.equal(reconciliationRunPayload.records.length, 1);
+    assert.equal(reconciliationRunPayload.records[0].settlementId, settlementId);
+    assert.equal(reconciliationRunPayload.records[0].reconciliationState, "recorded");
+
+    const reconciliationRecordResponse = await fetch(
+      `${baseUrl}/api/payments/reconciliation/records?limit=10`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      },
+    );
+    const reconciliationRecordPayload = await reconciliationRecordResponse.json();
+    assert.equal(reconciliationRecordResponse.status, 200);
+    assert.equal(reconciliationRecordPayload.ok, true);
+    assert.equal(reconciliationRecordPayload.summary.returnedCount, 1);
+    assert.equal(reconciliationRecordPayload.records[0].settlementId, settlementId);
+    assert.equal(reconciliationRecordPayload.records[0].bridgeTxHash, `0x${"55".repeat(32)}`);
+
+    const updatedPaymentListResponse = await fetch(
+      `${baseUrl}/api/payments/list?wallet=${encodeURIComponent(PAYER_WALLET.address)}&limit=10`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      },
+    );
+    const updatedPaymentListPayload = await updatedPaymentListResponse.json();
+    assert.equal(updatedPaymentListResponse.status, 200);
+    assert.equal(updatedPaymentListPayload.records[0].reconciliationStatus, "recorded");
+    assert.equal(updatedPaymentListPayload.records[0].settlementId, settlementId);
+
+    const recordedCandidateResponse = await fetch(
+      `${baseUrl}/api/payments/reconciliation/candidates?limit=10`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      },
+    );
+    const recordedCandidatePayload = await recordedCandidateResponse.json();
+    assert.equal(recordedCandidateResponse.status, 200);
+    assert.equal(recordedCandidatePayload.ok, true);
+    assert.equal(recordedCandidatePayload.summary.eligibleCount, 0);
+    assert.equal(recordedCandidatePayload.records.length, 0);
+
+    const recordedCandidateAllResponse = await fetch(
+      `${baseUrl}/api/payments/reconciliation/candidates?limit=10&eligibleOnly=0`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      },
+    );
+    const recordedCandidateAllPayload = await recordedCandidateAllResponse.json();
+    assert.equal(recordedCandidateAllResponse.status, 200);
+    assert.equal(recordedCandidateAllPayload.records.length, 1);
+    assert.equal(recordedCandidateAllPayload.records[0].reason, "already_recorded");
+    assert.equal(recordedCandidateAllPayload.records[0].settlementId, settlementId);
 
     const remoteBaseUrl = "http://receipt.remote";
     const remoteReceiptStateStore = new MemoryJsonStateStore({

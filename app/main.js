@@ -48,17 +48,26 @@ import { ReceiptRoles } from "./receipt-types.js";
 import {
   appendPrivateQuoteStoreMode,
   getPrivateQuoteStoreMode,
-  isPrivateQuoteDevControlsEnabled,
-  getPrivateQuoteStoreModeLabel,
   setPrivateQuoteLiveModeOverride,
   setPrivateQuoteStoreMode,
   PRIVATE_QUOTE_STORE_MODE_STORAGE_KEY,
 } from "./config.js";
 import { mountPaymentIntentWidget } from "./payment-intent-widget.js";
+import {
+  createShareablePaymentIntentPayload,
+  createShareablePaymentIntentUrl,
+} from "./payment-intent-share.js";
+import {
+  getStoredWalletProviderId,
+  isWalletSessionEnabled,
+  setStoredWalletProviderId,
+  setWalletSessionEnabled,
+  WALLET_PROVIDER_STORAGE_KEY,
+  WALLET_SESSION_STORAGE_KEY,
+} from "./wallet-session.js";
+import * as reconciliationUi from "./payment-reconciliation-ui.js";
 
 const RECENT_ACTIVITY_STORAGE_KEY = "hexapay_recent_activity_v1";
-const WALLET_SESSION_STORAGE_KEY = "hexapay_wallet_session_v1";
-const WALLET_PROVIDER_STORAGE_KEY = "hexapay_wallet_provider_v1";
 const APP_VIEWS = new Set([
   "dashboard",
   "send",
@@ -89,6 +98,15 @@ const state = {
     error: "",
     syncedAt: 0,
     wallet: "",
+  },
+  reconciliationHistory: {
+    records: [],
+    loading: false,
+    error: "",
+    syncedAt: 0,
+    wallet: "",
+    invoiceId: "",
+    authority: null,
   },
   privateBalance: createDefaultPrivateBalance(),
   invoiceSnapshots: {},
@@ -263,43 +281,6 @@ function createDefaultForms() {
   };
 }
 
-function isWalletSessionEnabled() {
-  if (typeof window === "undefined") {
-    return true;
-  }
-
-  return window.localStorage.getItem(WALLET_SESSION_STORAGE_KEY) !== "disabled";
-}
-
-function setWalletSessionEnabled(enabled) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(WALLET_SESSION_STORAGE_KEY, enabled ? "enabled" : "disabled");
-}
-
-function getStoredWalletProviderId() {
-  if (typeof window === "undefined") {
-    return "";
-  }
-
-  return window.localStorage.getItem(WALLET_PROVIDER_STORAGE_KEY) || "";
-}
-
-function setStoredWalletProviderId(walletId) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  if (!walletId) {
-    window.localStorage.removeItem(WALLET_PROVIDER_STORAGE_KEY);
-    return;
-  }
-
-  window.localStorage.setItem(WALLET_PROVIDER_STORAGE_KEY, walletId);
-}
-
 function stringifyUiMessage(value, fallback = "") {
   if (typeof value === "string") {
     return value;
@@ -469,6 +450,7 @@ function clearRecentActivity() {
 function recordRecentActivity(title, module, receipt, metadata = {}) {
   const entry = {
     hash: receipt.hash,
+    txHash: receipt.txHash || receipt.hash || "",
     title,
     module,
     subtitle: metadata.subtitle || shortAddress(receipt.hash, 6, 6),
@@ -479,6 +461,7 @@ function recordRecentActivity(title, module, receipt, metadata = {}) {
     explorerUrl: receipt.explorerUrl || "",
     identifiers: receipt.identifiers || {},
     confirmedAt: Date.now(),
+    metaLabel: metadata.metaLabel || "",
   };
 
   state.recentActivity = [entry, ...state.recentActivity.filter((item) => item.hash !== entry.hash)].slice(0, 8);
@@ -534,8 +517,105 @@ function normalizePaymentHistoryRecord(record = {}) {
     confirmedAt: getPaymentHistoryTimestamp(record) || Date.now(),
     explorerUrl: record.txHash ? getExplorerLink(state.selectedChainId, record.txHash) : "",
     intentHash: String(record.intentHash || ""),
+    invoiceId: String(record.invoiceId || ""),
+    reconciliationStatus: String(record.reconciliationStatus || ""),
     source: "payment-history",
   };
+}
+
+function getReconciliationRecordTimestamp(record) {
+  return Number(
+    record?.lifecycle?.appliedAt ||
+      record?.lifecycle?.recordedAt ||
+      record?.lifecycle?.submittedAt ||
+      record?.lifecycle?.eligibleAt ||
+      record?.lifecycle?.observedAt ||
+      record?.updatedAt ||
+      0,
+  );
+}
+
+function normalizeReconciliationRecord(record = {}) {
+  const settlement = getSettlementContext();
+  const txHash = String(record.bridgeTxHash || record.txHash || "");
+
+  return {
+    recordId: String(record.recordId || ""),
+    settlementId: String(record.settlementId || ""),
+    requestId: String(record.requestId || ""),
+    invoiceId: String(record.invoiceId || ""),
+    merchant: String(record.merchant || ""),
+    payer: String(record.payer || ""),
+    rawAmount: String(record.amount || ""),
+    txHash,
+    sourceTxHash: String(record.txHash || ""),
+    bridgeTxHash: String(record.bridgeTxHash || ""),
+    amount: formatPaymentHistoryAmount(record.amount, settlement.decimals),
+    currency: String(record.currency || settlement.symbol || "USDC"),
+    state: String(record.reconciliationState || record.state || ""),
+    reason: String(record.reconciliationReason || record.reason || ""),
+    verificationStatus: String(record.verificationStatus || ""),
+    verificationReason: String(record.verificationReason || ""),
+    confirmedAt: getReconciliationRecordTimestamp(record) || Date.now(),
+    explorerUrl: txHash ? getExplorerLink(state.selectedChainId, txHash) : "",
+    source: "reconciliation-record",
+  };
+}
+
+function formatReconciliationReasonLabel(value) {
+  return reconciliationUi.formatReconciliationReasonLabel(value);
+}
+
+function getReconciliationStateLabel(state = "") {
+  return reconciliationUi.getReconciliationSemanticLabel(state);
+}
+
+function getReconciliationActivityTitle(record = {}) {
+  return reconciliationUi.getReconciliationSemanticTitle(record.state);
+}
+
+function getReconciliationHelperCopy(record = {}) {
+  const reasonCode = record.reason || record.verificationReason;
+  const meaning = reconciliationUi.getReconciliationSemanticMeaning(record.state);
+  const owner = reconciliationUi.getReconciliationNextOwnerLabel(record.state, reasonCode);
+  const nextStep = reconciliationUi.getReconciliationNextStepLabel(record.state, reasonCode);
+
+  return [meaning, `Owner: ${owner}.`, `Next: ${nextStep}`].filter(Boolean).join(" ");
+}
+
+function getLatestReconciliationRecordForInvoice(invoiceId = "") {
+  const needle = String(invoiceId || "").trim().toLowerCase();
+
+  if (!needle) {
+    return null;
+  }
+
+  return (
+    state.reconciliationHistory.records.find(
+      (record) => String(record.invoiceId || "").trim().toLowerCase() === needle,
+    ) || null
+  );
+}
+
+function getPaymentRailStatusLabel(status = "") {
+  switch (String(status || "").trim().toLowerCase()) {
+    case "settled":
+      return "Rail settled";
+    case "executing":
+      return "Rail executing";
+    case "signed":
+      return "Rail signed";
+    case "failed":
+      return "Rail failed";
+    case "challenge":
+      return "Rail challenge";
+    default:
+      return "Rail pending";
+  }
+}
+
+function getReconciliationAuthority() {
+  return state.reconciliationHistory.authority || null;
 }
 
 function extractApiErrorMessage(payload, fallback) {
@@ -606,6 +686,86 @@ async function syncPaymentHistory({ silent = true } = {}) {
       error: String(error?.message || "Payment history is unavailable."),
       syncedAt: Date.now(),
       wallet,
+    };
+  } finally {
+    if (!silent) {
+      render();
+    }
+  }
+}
+
+async function syncReconciliationRecords({ silent = true, invoiceId = "" } = {}) {
+  const wallet = normalizeAddress(state.runtime?.account || "");
+  const normalizedInvoiceId = String(invoiceId || "").trim() ? hashText(invoiceId) : "";
+
+  if (!wallet && !normalizedInvoiceId) {
+    state.reconciliationHistory = {
+      records: [],
+      loading: false,
+      error: "",
+      syncedAt: 0,
+      wallet: "",
+      invoiceId: "",
+      authority: null,
+    };
+    return;
+  }
+
+  if (!silent) {
+    state.reconciliationHistory.loading = true;
+    state.reconciliationHistory.error = "";
+    render();
+  }
+
+  try {
+    const url = new URL("/api/payments/reconciliation/records", window.location.origin);
+    if (wallet) {
+      url.searchParams.set("wallet", wallet);
+    }
+    if (normalizedInvoiceId) {
+      url.searchParams.set("invoiceId", normalizedInvoiceId);
+    }
+    url.searchParams.set("limit", normalizedInvoiceId ? "8" : "12");
+
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(
+        extractApiErrorMessage(
+          payload,
+          `Payment reconciliation request failed (${response.status})`,
+        ),
+      );
+    }
+
+    const records = Array.isArray(payload.records)
+      ? payload.records.map((record) => normalizeReconciliationRecord(record))
+      : [];
+
+    state.reconciliationHistory = {
+      records,
+      loading: false,
+      error: "",
+      syncedAt: Date.now(),
+      wallet,
+      invoiceId: normalizedInvoiceId,
+      authority: payload.authority && typeof payload.authority === "object" ? payload.authority : null,
+    };
+  } catch (error) {
+    state.reconciliationHistory = {
+      records: [],
+      loading: false,
+      error: String(error?.message || "Payment reconciliation history is unavailable."),
+      syncedAt: Date.now(),
+      wallet,
+      invoiceId: normalizedInvoiceId,
+      authority: null,
     };
   } finally {
     if (!silent) {
@@ -721,6 +881,15 @@ function formatSettlementAmount(value) {
   }
 }
 
+function formatHumanAmountFromUnits(value, decimals = getSettlementContext().decimals) {
+  try {
+    const formatted = formatUnits(String(value || "0"), Number(decimals || 6));
+    return formatted.replace(/(\.\d*?[1-9])0+$|\.0+$/, "$1");
+  } catch (error) {
+    return String(value || "");
+  }
+}
+
 function formatTimestamp(timestamp) {
   const numeric = Number(timestamp || 0);
 
@@ -729,6 +898,204 @@ function formatTimestamp(timestamp) {
   }
 
   return new Date(numeric * 1000).toLocaleString();
+}
+
+function getInvoicePaymentRailPayload() {
+  const invoice = getInvoiceVisualState();
+
+  if (!invoice) {
+    return null;
+  }
+
+  const settlement = getSettlementContext();
+  const clearOutstanding = String(invoice.clearOutstanding || "").trim();
+  const amount = clearOutstanding
+    ? formatHumanAmountFromUnits(clearOutstanding, settlement.decimals)
+    : "";
+
+  return createShareablePaymentIntentPayload({
+    source: "invoice",
+    title: invoice.invoiceId ? `Invoice ${shortAddress(invoice.invoiceId, 6, 6)}` : "Invoice payment",
+    merchantId: state.companySnapshot?.companyId || "hexapay-merchant",
+    terminalId: invoice.invoiceId ? `invoice-${String(invoice.invoiceId).slice(2, 8)}` : "dashboard",
+    receiptId: invoice.invoiceId || "",
+    quoteId: "",
+    invoiceId: invoice.invoiceId || "",
+    merchantAddress: invoice.company || state.runtime.account || "",
+    amount,
+    currency: settlement.symbol,
+  });
+}
+
+function getPaymentIntentWidgetPrefill() {
+  const invoicePayload = getInvoicePaymentRailPayload();
+
+  if (invoicePayload) {
+    return {
+      ...invoicePayload,
+      linkedInvoiceId: invoicePayload.invoiceId,
+      helperLabel: "Invoice linked",
+      helperCopy: invoicePayload.invoiceId
+        ? `Ready to collect settlement for ${shortAddress(invoicePayload.invoiceId, 8, 8)}.`
+        : "Ready to collect invoice settlement.",
+      prefillRevision: [
+        invoicePayload.invoiceId,
+        invoicePayload.amount,
+        invoicePayload.merchantAddress,
+      ].join(":"),
+    };
+  }
+
+  return {
+    merchantId: state.companySnapshot?.companyId || "",
+    terminalId: "dashboard",
+    receiptId: "",
+    quoteId: "",
+    linkedInvoiceId: "",
+    merchantAddress: state.runtime.account || "",
+    amount: "",
+    currency: getSettlementContext().symbol,
+    helperLabel: "Manual request",
+    helperCopy: "Create a payment request directly from the dashboard.",
+    prefillRevision: `manual:${state.runtime.account || ""}:${state.companySnapshot?.companyId || ""}`,
+  };
+}
+
+function applyPaymentSettlementToInvoice(invoiceId, result = {}) {
+  if (!invoiceId) {
+    return;
+  }
+
+  upsertInvoiceSnapshot(invoiceId, {
+    paymentRailStatus: "settled",
+    paymentRailTxHash: result.txHash || "",
+    paymentRailSettledAt: Date.now(),
+    workflowSyncStatus: "external-rail",
+    workflowSyncError:
+      "Current workflow settlement is not auto-triggered because payInvoice uses the confidential HexaPay balance rail and would not reconcile with the external USDC executor automatically.",
+  });
+}
+
+function getInvoicePaymentLink() {
+  const payload = getInvoicePaymentRailPayload();
+
+  if (!payload || !payload.amount || !payload.merchantAddress) {
+    return "";
+  }
+
+  return createShareablePaymentIntentUrl(payload, `${window.location.origin}/pay.html`);
+}
+
+async function readInvoiceSnapshotFromChain(invoiceId) {
+  const contract = getContract(
+    "workflow",
+    requireConfiguredContractAddress("workflow"),
+    requireAlignedReadRunner(),
+  );
+  const invoice = await contract.getInvoice(invoiceId);
+  const data = {
+    invoiceId,
+    issuer: invoice.issuer,
+    payer: invoice.payer,
+    company: invoice.company,
+    createdAt: invoice.createdAt.toString(),
+    dueAt: invoice.dueAt.toString(),
+    metadataHash: invoice.metadataHash,
+    status: invoice.status.toString(),
+    statusLabel: describeInvoiceStatus(invoice.status),
+    paymentCount: invoice.paymentCount.toString(),
+  };
+
+  upsertInvoiceSnapshot(invoiceId, data);
+  return data;
+}
+
+async function readInvoiceOutstandingFromChain(invoiceId) {
+  const response = await readSealedValue(
+    state.runtime,
+    state.fhenix,
+    "workflow",
+    requireConfiguredContractAddress("workflow"),
+    "getSealedInvoiceOutstanding",
+    [invoiceId],
+  );
+  const data = {
+    invoiceId,
+    clearOutstanding: response.clearValue.toString(),
+    formattedOutstanding: formatSettlementAmount(response.clearValue),
+    publicKey: response.publicKey,
+    sealedOutstanding: response.sealedValue,
+  };
+
+  upsertInvoiceSnapshot(invoiceId, data);
+  return data;
+}
+
+async function syncInvoiceSnapshotFromChain(invoiceId, { includeOutstanding = false } = {}) {
+  const data = await readInvoiceSnapshotFromChain(invoiceId);
+
+  if (includeOutstanding) {
+    const outstanding = await readInvoiceOutstandingFromChain(invoiceId);
+    return {
+      ...data,
+      ...outstanding,
+    };
+  }
+
+  return data;
+}
+
+async function readExternalSettlementReceiptFromChain(settlementId) {
+  const contract = getContract(
+    "workflow",
+    requireConfiguredContractAddress("workflow"),
+    requireAlignedReadRunner(),
+  );
+  const receipt = await contract.getExternalSettlementReceipt(settlementId);
+
+  return {
+    settlementId,
+    invoiceId: receipt.invoiceId,
+    sourceTxHash: receipt.txHash,
+    payerWallet: receipt.payerWallet,
+    merchant: receipt.merchant,
+    token: receipt.token,
+    observedAmount: receipt.observedAmount.toString(),
+    observedAmountDisplay: formatSettlementAmount(receipt.observedAmount),
+    appliedAmount: receipt.appliedAmount.toString(),
+    appliedAmountDisplay: formatSettlementAmount(receipt.appliedAmount),
+    recordedAt: receipt.recordedAt.toString(),
+    appliedAt: receipt.appliedAt.toString(),
+    applied: Boolean(receipt.applied),
+  };
+}
+
+async function syncInvoiceReconciliationDetail(invoiceId) {
+  const snapshot = state.invoiceSnapshots[String(invoiceId || "").toLowerCase()] || null;
+  const reconciliation = getLatestReconciliationRecordForInvoice(invoiceId);
+
+  if (!snapshot || !reconciliation?.settlementId) {
+    return;
+  }
+
+  try {
+    const receipt = await readExternalSettlementReceiptFromChain(reconciliation.settlementId);
+    upsertInvoiceSnapshot(invoiceId, {
+      reconciliationObservedAmount: receipt.observedAmount,
+      reconciliationObservedAmountDisplay: receipt.observedAmountDisplay,
+      reconciliationAppliedAmount: receipt.appliedAmount,
+      reconciliationAppliedAmountDisplay: receipt.appliedAmountDisplay,
+      reconciliationRecordedAt: receipt.recordedAt,
+      reconciliationAppliedAt: receipt.appliedAt,
+      reconciliationSourceTxHash: receipt.sourceTxHash,
+      reconciliationToken: receipt.token,
+      reconciliationApplied: receipt.applied,
+    });
+  } catch (error) {
+    upsertInvoiceSnapshot(invoiceId, {
+      reconciliationDetailError: String(error?.shortMessage || error?.message || ""),
+    });
+  }
 }
 
 async function syncPrivateQuoteConfig({ refresh = false } = {}) {
@@ -820,7 +1187,9 @@ function getInvoiceVisualState() {
     snapshot.clearOutstanding !== undefined ? String(snapshot.clearOutstanding) : "";
   let visualLabel = rawStatusLabel || "Pending";
 
-  if (clearOutstanding === "0") {
+  if (snapshot.paymentRailStatus === "settled") {
+    visualLabel = "Paid via payment rail";
+  } else if (clearOutstanding === "0") {
     visualLabel = "Paid in full";
   } else if (rawStatus === "3") {
     visualLabel = "Partially paid";
@@ -1085,6 +1454,13 @@ async function refreshAppState({ requestAccounts = false, silent = false, wallet
     syncWalletListeners(runtime.walletProvider);
     await syncLatestPrivateQuoteReceipts();
     await syncPaymentHistory({ silent: true });
+    await syncReconciliationRecords({
+      silent: true,
+      invoiceId: state.forms.monitorInvoice.invoiceId,
+    });
+    if (state.forms.monitorInvoice.invoiceId) {
+      await syncInvoiceReconciliationDetail(hashText(state.forms.monitorInvoice.invoiceId));
+    }
 
     if (!state.manifest) {
       setNotice("Sync manifest first so the app can discover the live contract suite.", "warn");
@@ -1233,6 +1609,34 @@ async function handleCopyPrivateQuoteLink() {
     setNotice(getPrivateQuoteErrorMessage(error), "bad");
   }
 
+  render();
+}
+
+async function handleUseInvoicePaymentRail() {
+  const payload = getInvoicePaymentRailPayload();
+
+  if (!payload) {
+    throw new Error("Load an invoice first.");
+  }
+
+  if (!payload.amount) {
+    throw new Error("Reveal the invoice outstanding first so the payment amount can be attached.");
+  }
+
+  setActiveView("dashboard");
+  setNotice("Invoice moved into the payment rail. Review the prefilled request on the dashboard.", "good");
+  render();
+}
+
+async function handleCopyInvoicePaymentLink() {
+  const paymentLink = getInvoicePaymentLink();
+
+  if (!paymentLink) {
+    throw new Error("Load an invoice and reveal the outstanding amount before copying the payment link.");
+  }
+
+  await navigator.clipboard.writeText(paymentLink);
+  setNotice("Invoice payment link copied to clipboard.", "good");
   render();
 }
 
@@ -1426,6 +1830,9 @@ async function handleCreateInvoice() {
       company,
       payer,
       statusLabel: "Pending Approval",
+      clearOutstanding: units.toString(),
+      formattedOutstanding: formatSettlementAmount(units),
+      requestedAmount: values.amount,
     });
   }
 }
@@ -1505,26 +1912,9 @@ async function handleReadInvoice() {
   render();
 
   try {
-    const contract = getContract(
-      "workflow",
-      requireConfiguredContractAddress("workflow"),
-      requireAlignedReadRunner(),
-    );
-    const invoice = await contract.getInvoice(invoiceId);
-    const data = {
-      invoiceId,
-      issuer: invoice.issuer,
-      payer: invoice.payer,
-      company: invoice.company,
-      createdAt: invoice.createdAt.toString(),
-      dueAt: invoice.dueAt.toString(),
-      metadataHash: invoice.metadataHash,
-      status: invoice.status.toString(),
-      statusLabel: describeInvoiceStatus(invoice.status),
-      paymentCount: invoice.paymentCount.toString(),
-    };
-
-    upsertInvoiceSnapshot(invoiceId, data);
+    const data = await readInvoiceSnapshotFromChain(invoiceId);
+    await syncReconciliationRecords({ silent: true, invoiceId });
+    await syncInvoiceReconciliationDetail(invoiceId);
     setNotice(`Invoice loaded: ${data.statusLabel}.`, "good");
   } catch (error) {
     setNotice(formatTransactionError(error), "bad");
@@ -1544,23 +1934,9 @@ async function handleReadOutstanding() {
   render();
 
   try {
-    const response = await readSealedValue(
-      state.runtime,
-      state.fhenix,
-      "workflow",
-      requireConfiguredContractAddress("workflow"),
-      "getSealedInvoiceOutstanding",
-      [invoiceId],
-    );
-    const data = {
-      invoiceId,
-      clearOutstanding: response.clearValue.toString(),
-      formattedOutstanding: formatSettlementAmount(response.clearValue),
-      publicKey: response.publicKey,
-      sealedOutstanding: response.sealedValue,
-    };
-
-    upsertInvoiceSnapshot(invoiceId, data);
+    const data = await readInvoiceOutstandingFromChain(invoiceId);
+    await syncReconciliationRecords({ silent: true, invoiceId });
+    await syncInvoiceReconciliationDetail(invoiceId);
     setNotice(`Outstanding revealed locally: ${data.formattedOutstanding}.`, "good");
   } catch (error) {
     setNotice(formatTransactionError(error), "bad");
@@ -2285,51 +2661,84 @@ function renderCompanySummary() {
 
 function renderPaymentIntentWidget() {
   const container = document.querySelector("[data-payment-intent-widget]");
-  
+
   if (!container) {
     return;
   }
 
-  // Only show on dashboard view
   if (state.activeView !== "dashboard") {
     container.style.display = "none";
     return;
   }
 
   container.style.display = "block";
+  const prefill = getPaymentIntentWidgetPrefill();
 
   const widgetOptions = {
     permitHash: "",
     sessionId: "sess_hexapay_ui",
     deviceFingerprintHash: "dev_hexapay_hash",
-    currency: "USDC",
-    amount: "",
+    currency: prefill.currency || "USDC",
+    amount: prefill.amount || "",
+    merchantId: prefill.merchantId || "",
+    terminalId: prefill.terminalId || "",
+    receiptId: prefill.receiptId || "",
+    quoteId: prefill.quoteId || "",
+    merchantAddress: prefill.merchantAddress || "",
+    linkedInvoiceId: prefill.linkedInvoiceId || "",
+    helperLabel: prefill.helperLabel || "",
+    helperCopy: prefill.helperCopy || "",
+    prefillRevision: prefill.prefillRevision || "",
     executorAddress: import.meta.env.VITE_HEXAPAY_EXECUTOR_CONTRACT || "",
     connectedWalletAddress: state.runtime.connected ? state.runtime.account : "",
     walletSessionActive: state.runtime.connected,
     onSuccess: (result) => {
-      console.log("Payment executed successfully:", result);
-      // Optionally refresh app state or record activity
+      const linkedInvoiceId = result.linkedInvoiceId || prefill.linkedInvoiceId || "";
+      const amountDisplay = formatPaymentHistoryAmount(
+        result.intent?.amount || "",
+        result.intent?.decimals || 6,
+      );
+
       recordRecentActivity(
-        "Payment executed",
+        linkedInvoiceId ? "Invoice payment settled" : "Payment executed",
         "Payments",
         {
           hash: result.txHash,
+          txHash: result.txHash,
           blockNumber: result.blockNumber,
           explorerUrl: `https://sepolia.arbiscan.io/tx/${result.txHash}`,
           identifiers: {
             requestId: result.requestId,
             challengeId: result.challengeId,
+            invoiceId: linkedInvoiceId,
           },
         },
         {
-          amountDisplay: "LIVE",
-          currency: "PAYMENT",
+          amountDisplay: amountDisplay || "LIVE",
+          currency: result.intent?.currency || prefill.currency || "USDC",
           direction: "neutral",
           subtitle: `Request ${result.requestId.slice(0, 16)}...`,
+          metaLabel: linkedInvoiceId ? "INVOICE" : "SETTLED",
         }
       );
-      syncPaymentHistory({ silent: true }).then(() => render());
+
+      if (linkedInvoiceId) {
+        applyPaymentSettlementToInvoice(linkedInvoiceId, result);
+        setNotice("Payment settled on the live rail and linked to the invoice in the app view.", "good");
+      } else {
+        setNotice("Payment executed successfully on the live rail.", "good");
+      }
+
+      Promise.all([
+        syncPaymentHistory({ silent: true }),
+        syncReconciliationRecords({ silent: true, invoiceId: linkedInvoiceId }),
+      ])
+        .then(async () => {
+          if (linkedInvoiceId) {
+            await syncInvoiceReconciliationDetail(linkedInvoiceId);
+          }
+        })
+        .then(() => render());
       render();
     },
     onError: (error) => {
@@ -2350,8 +2759,6 @@ function renderPaymentIntentWidget() {
 function renderPrivateQuoteSummary() {
   const summary = document.querySelector("[data-private-quote-summary]");
   const helper = document.querySelector("[data-private-quote-helper]");
-  const storeModeField = document.querySelector("[data-private-quote-store-mode]");
-  const storeModeFieldWrapper = storeModeField?.closest(".pq-store-mode-field") || null;
   const switchButton = document.querySelector("[data-private-quote-switch-button]");
   const resultCard = document.querySelector("[data-private-quote-result]");
   const receiptCard = document.querySelector("[data-private-quote-receipt]");
@@ -2389,8 +2796,6 @@ function renderPrivateQuoteSummary() {
     ? getChainMetadata(state.runtime.chainId).shortLabel
     : "Wallet offline";
   const moduleChain = config ? getChainMetadata(config.chainId).shortLabel : "Loading";
-  const storeModeLabel = getPrivateQuoteStoreModeLabel(receiptStoreMode);
-  const showDevControls = Boolean(config) && isPrivateQuoteDevControlsEnabled();
 
   if (!config) {
     helper.textContent = "Loading private quote module config...";
@@ -2411,8 +2816,8 @@ function renderPrivateQuoteSummary() {
       <strong>${escapeHtml(moduleChain)}</strong>
     </div>
     <div class="summary-row">
-      <span>${showDevControls ? "Receipt store" : "Receipt source"}</span>
-      <strong>${escapeHtml(showDevControls ? storeModeLabel : "Backend API")}</strong>
+      <span>Receipt source</span>
+      <strong>Backend API</strong>
     </div>
     <div class="summary-row">
       <span>Contract</span>
@@ -2438,14 +2843,6 @@ function renderPrivateQuoteSummary() {
     state.busyCommand === "switch-private-quote-chain"
       ? "Switching..."
       : `Switch to ${moduleChain}`;
-
-  if (storeModeField) {
-    storeModeField.value = receiptStoreMode;
-    storeModeField.disabled = state.busyAction !== "" || state.busyCommand !== "";
-  }
-  if (storeModeFieldWrapper) {
-    storeModeFieldWrapper.hidden = !config || !showDevControls;
-  }
 
   resultCard.hidden = !latestQuote;
 
@@ -2584,7 +2981,12 @@ async function syncReceiptStoreMode(mode, { syncUrl = true } = {}) {
 
 function renderInvoiceSummary() {
   const summary = document.querySelector("[data-invoice-summary]");
+  const helper = document.querySelector("[data-invoice-payment-helper]");
+  const paymentLink = document.querySelector("[data-invoice-payment-link]");
   const invoice = getInvoiceVisualState();
+  const invoicePaymentLink = getInvoicePaymentLink();
+  const reconciliation = invoice ? getLatestReconciliationRecordForInvoice(invoice.invoiceId) : null;
+  const reconciliationLabel = reconciliation ? getReconciliationStateLabel(reconciliation.state) : "";
 
   if (!invoice) {
     summary.innerHTML = `
@@ -2597,6 +2999,14 @@ function renderInvoiceSummary() {
         <strong>Reveal to inspect</strong>
       </div>
     `;
+    if (helper) {
+      helper.textContent = "Load an invoice, reveal the outstanding amount, then move it into the payment rail.";
+    }
+    if (paymentLink) {
+      paymentLink.href = "/pay.html";
+      paymentLink.setAttribute("aria-disabled", "true");
+    }
+    renderInvoiceReconciliationDetail(null, null);
     return;
   }
 
@@ -2620,6 +3030,238 @@ function renderInvoiceSummary() {
     <div class="summary-row">
       <span>Due</span>
       <strong>${escapeHtml(formatTimestamp(invoice.dueAt))}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Payment rail</span>
+      <strong>${escapeHtml(invoice.paymentRailStatus === "settled" ? "Rail settled" : "Ready to link")}</strong>
+    </div>
+    ${
+      reconciliation
+        ? `
+    <div class="summary-row">
+      <span>Reconciliation</span>
+      <strong>${escapeHtml(reconciliationLabel)}</strong>
+    </div>`
+        : invoice.workflowSyncStatus
+        ? `
+    <div class="summary-row">
+      <span>Workflow sync</span>
+      <strong>${escapeHtml(
+        invoice.workflowSyncStatus === "settled"
+          ? "Settled on workflow"
+          : invoice.workflowSyncStatus === "external-rail"
+            ? "External rail only"
+          : invoice.workflowSyncStatus === "failed"
+            ? "Needs retry"
+          : "Pending sync",
+      )}</strong>
+    </div>`
+        : ""
+    }
+    ${
+      reconciliation?.settlementId
+        ? `
+    <div class="summary-row">
+      <span>Settlement</span>
+      <strong>${escapeHtml(shortAddress(reconciliation.settlementId, 8, 8))}</strong>
+    </div>`
+        : ""
+    }
+    ${
+      reconciliation?.bridgeTxHash
+        ? `
+    <div class="summary-row">
+      <span>Bridge tx</span>
+      <strong>${escapeHtml(shortAddress(reconciliation.bridgeTxHash, 8, 8))}</strong>
+    </div>`
+        : invoice.paymentRailTxHash
+        ? `
+    <div class="summary-row">
+      <span>Rail tx</span>
+      <strong>${escapeHtml(shortAddress(invoice.paymentRailTxHash, 8, 8))}</strong>
+    </div>`
+        : ""
+    }
+    ${
+      invoice.invoiceWorkflowTxHash
+        ? `
+    <div class="summary-row">
+      <span>Workflow tx</span>
+      <strong>${escapeHtml(shortAddress(invoice.invoiceWorkflowTxHash, 8, 8))}</strong>
+    </div>`
+        : ""
+    }
+  `;
+
+  if (helper) {
+    if (reconciliation) {
+      helper.textContent =
+        getReconciliationHelperCopy(reconciliation) ||
+        "Invoice-linked reconciliation status is available from the backend worker.";
+    } else if (invoice.workflowSyncStatus === "external-rail") {
+      helper.textContent =
+        "Payment settled on the live USDC rail and is linked to this invoice in the product view. The current workflow contract is not auto-settled because payInvoice would charge the HexaPay internal balance separately.";
+    } else if (invoice.workflowSyncStatus === "failed") {
+      helper.textContent = invoice.workflowSyncError
+        ? `Payment rail succeeded, but workflow sync needs attention: ${invoice.workflowSyncError}`
+        : "Payment rail succeeded, but workflow sync still needs attention.";
+    } else if (invoice.workflowSyncStatus === "pending") {
+      helper.textContent = "Payment rail succeeded. HexaPay is syncing this invoice into the workflow module.";
+    } else if (invoice.workflowSyncStatus === "settled") {
+      helper.textContent = invoice.invoiceWorkflowTxHash
+        ? `Invoice is now settled on the workflow module. Tx ${shortAddress(invoice.invoiceWorkflowTxHash, 8, 8)} is ready in Activity.`
+        : "Invoice is now settled on the workflow module.";
+    } else if (invoice.paymentRailStatus === "settled") {
+      helper.textContent = invoice.paymentRailTxHash
+        ? `Settlement captured in the payment rail. Tx ${shortAddress(invoice.paymentRailTxHash, 8, 8)} is ready in Activity.`
+        : "Settlement captured in the payment rail for this invoice.";
+    } else if (invoicePaymentLink) {
+      helper.textContent = "This invoice is ready to open in the payment rail or share as a payer payment link.";
+    } else {
+      helper.textContent = "Reveal the invoice outstanding first so HexaPay can generate a live payment request.";
+    }
+  }
+
+  if (paymentLink) {
+    paymentLink.href = invoicePaymentLink || "/pay.html";
+    paymentLink.toggleAttribute("aria-disabled", !invoicePaymentLink);
+  }
+
+  renderInvoiceReconciliationDetail(invoice, reconciliation);
+}
+
+function renderInvoiceReconciliationDetail(invoice, reconciliation) {
+  const detail = document.querySelector("[data-invoice-reconciliation-detail]");
+
+  if (!detail) {
+    return;
+  }
+
+  if (!invoice) {
+    detail.hidden = true;
+    return;
+  }
+
+  const authority = getReconciliationAuthority();
+  const reasonCode =
+    reconciliation?.reason ||
+    reconciliation?.verificationReason ||
+    state.reconciliationHistory.error ||
+    "";
+  const statusLabel = reconciliation
+    ? getReconciliationStateLabel(reconciliation.state)
+    : invoice.paymentRailStatus === "settled"
+      ? "Waiting for backend observation"
+      : "No reconciliation record";
+  const backendPhase = reconciliation
+    ? reconciliationUi.getReconciliationBackendPhaseLabel(reconciliation.state)
+    : "Not observed";
+  const meaning = reconciliation
+    ? reconciliationUi.getReconciliationSemanticMeaning(reconciliation.state)
+    : invoice.paymentRailStatus === "settled"
+      ? "The live rail payment is settled, but the backend worker has not surfaced a reconciliation record yet."
+      : "This invoice does not have a live reconciliation record yet.";
+  const nextOwner = reconciliation
+    ? reconciliationUi.getReconciliationNextOwnerLabel(reconciliation.state, reasonCode)
+    : invoice.paymentRailStatus === "settled"
+      ? "HexaPay backend"
+      : "Merchant ops";
+  const nextStep = reconciliation
+    ? reconciliationUi.getReconciliationNextStepLabel(reconciliation.state, reasonCode)
+    : invoice.paymentRailStatus === "settled"
+      ? "Wait for the worker to observe and verify the live rail settlement."
+      : "Use the payment rail or share the payment link to generate a settlement candidate.";
+  const settlementSource = reconciliation
+    ? reconciliationUi.getSettlementSourceLabel(reconciliation)
+    : invoice.paymentRailStatus === "settled"
+      ? "Executor chain settlement"
+      : "Waiting for settlement source";
+  const invoiceLinkage = reconciliation
+    ? reconciliationUi.getInvoiceLinkageLabel(reconciliation)
+    : "receiptId = invoiceId";
+  const authorityLabel = authority
+    ? [
+        reconciliationUi.formatReconciliationAuthorityValue(authority.settlementSource),
+        reconciliationUi.formatReconciliationAuthorityValue(authority.orchestration),
+        reconciliationUi.formatReconciliationAuthorityValue(authority.accounting),
+      ]
+        .filter(Boolean)
+        .join(" -> ")
+    : "Executor Chain -> Payment Reconciliation Store -> Workflow Contract";
+  const sourceTx = invoice.reconciliationSourceTxHash || reconciliation?.sourceTxHash || reconciliation?.txHash || invoice.paymentRailTxHash || "";
+  const workflowTx = reconciliation?.bridgeTxHash || "";
+  const observedAmount =
+    invoice.reconciliationObservedAmountDisplay ||
+    reconciliation?.amount ||
+    (invoice.paymentRailStatus === "settled" ? invoice.formattedOutstanding || "Observed on rail" : "Waiting");
+  const appliedAmount =
+    invoice.reconciliationAppliedAmountDisplay ||
+    (reconciliation?.state && reconciliationUi.getReconciliationSemanticKey(reconciliation.state) === "applied"
+      ? "Applied on workflow"
+      : "Not applied yet");
+  const remainingOutstanding = invoice.formattedOutstanding || "Reveal outstanding to inspect";
+
+  detail.hidden = false;
+  detail.innerHTML = `
+    <div class="summary-row">
+      <span>Reconciliation status</span>
+      <strong>${escapeHtml(statusLabel)}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Backend phase</span>
+      <strong>${escapeHtml(backendPhase)}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Meaning</span>
+      <strong>${escapeHtml(meaning)}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Reason code</span>
+      <strong>${escapeHtml(reasonCode || "n/a")}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Who acts next</span>
+      <strong>${escapeHtml(nextOwner)}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Next step</span>
+      <strong>${escapeHtml(nextStep)}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Settlement source</span>
+      <strong>${escapeHtml(settlementSource)}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Reconciliation authority</span>
+      <strong>${escapeHtml(authorityLabel)}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Invoice linkage</span>
+      <strong>${escapeHtml(invoiceLinkage)}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Invoice id</span>
+      <strong>${escapeHtml(invoice.invoiceId)}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Payment tx</span>
+      <strong>${escapeHtml(sourceTx || "Not available")}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Workflow tx</span>
+      <strong>${escapeHtml(workflowTx || "Not recorded yet")}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Observed amount</span>
+      <strong>${escapeHtml(observedAmount)}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Applied amount</span>
+      <strong>${escapeHtml(appliedAmount)}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Remaining outstanding</span>
+      <strong>${escapeHtml(remainingOutstanding)}</strong>
     </div>
   `;
 }
@@ -2934,11 +3576,12 @@ function renderContractCards() {
   }
 }
 
-function renderActivityList() {
-  const list = document.querySelector("[data-activity-list]");
-  const summary = document.querySelector("[data-payment-history-summary]");
+function getMergedActivityEntries() {
   const historyRecords = Array.isArray(state.paymentHistory.records)
     ? state.paymentHistory.records
+    : [];
+  const reconciliationRecords = Array.isArray(state.reconciliationHistory.records)
+    ? state.reconciliationHistory.records
     : [];
   const mergedEntries = [];
   const seenHashes = new Set();
@@ -2951,21 +3594,64 @@ function renderActivityList() {
 
     mergedEntries.push({
       hash: hashKey || `payment-${record.requestId}`,
-      title: `Payment ${String(record.status || "challenge").toLowerCase()}`,
+      title: record.invoiceId
+        ? `Invoice payment ${String(record.status || "challenge").toLowerCase()}`
+        : `Payment ${String(record.status || "challenge").toLowerCase()}`,
       module: "Payments",
       subtitle: record.requestId ? `Request ${record.requestId.slice(0, 16)}...` : "Payment rail",
       amountDisplay: record.amount || "0",
       currency: record.currency || "USDC",
       direction: getPaymentHistoryDirection(record.status),
-      blockNumber: "",
+      blockNumber: record.blockNumber || "",
+      txHash: record.txHash || "",
       explorerUrl: record.explorerUrl || "",
       identifiers: {
         requestId: record.requestId,
         intentHash: record.intentHash,
+        invoiceId: record.invoiceId || "",
       },
       confirmedAt: Number(record.confirmedAt || Date.now()),
       source: "payment-history",
-      metaLabel: String(record.status || "challenge").toUpperCase(),
+      metaLabel: "PAYMENT",
+      railStatus: getPaymentRailStatusLabel(record.status),
+    });
+  });
+
+  reconciliationRecords.forEach((record) => {
+    const hashKey = `reconciliation-${record.recordId || record.settlementId || record.requestId}`;
+    const txHash = record.bridgeTxHash || record.txHash || "";
+
+    mergedEntries.push({
+      hash: hashKey,
+      title: getReconciliationActivityTitle(record),
+      module: "Reconciliation",
+      subtitle: record.invoiceId
+        ? `Invoice ${shortAddress(record.invoiceId, 8, 8)}`
+        : "Workflow reconciliation",
+      amountDisplay: record.amount || "0",
+      currency: record.currency || "USDC",
+      direction: "neutral",
+      blockNumber: "",
+      txHash,
+      explorerUrl: record.explorerUrl || "",
+      identifiers: {
+        requestId: record.requestId,
+        settlementId: record.settlementId,
+        invoiceId: record.invoiceId || "",
+      },
+      confirmedAt: Number(record.confirmedAt || Date.now()),
+      source: "reconciliation-history",
+      metaLabel: "RECON",
+      railStatus: getReconciliationStateLabel(record.state),
+      reviewReason: record.reason || record.verificationReason || "",
+      followUpOwner: reconciliationUi.getReconciliationNextOwnerLabel(
+        record.state,
+        record.reason || record.verificationReason,
+      ),
+      nextStep: reconciliationUi.getReconciliationNextStepLabel(
+        record.state,
+        record.reason || record.verificationReason,
+      ),
     });
   });
 
@@ -2977,20 +3663,76 @@ function renderActivityList() {
 
     mergedEntries.push({
       ...entry,
+      txHash: entry.txHash || entry.hash || "",
       source: entry.source || "local-log",
       metaLabel: entry.metaLabel || "",
+      railStatus: entry.metaLabel || "",
     });
   });
 
   mergedEntries.sort((left, right) => Number(right.confirmedAt || 0) - Number(left.confirmedAt || 0));
+  return mergedEntries;
+}
+
+function renderDashboardActivityPreview() {
+  const list = document.querySelector("[data-dashboard-activity-list]");
+
+  if (!list) {
+    return;
+  }
+
+  const entries = getMergedActivityEntries().slice(0, 3);
+
+  if (!entries.length) {
+    list.innerHTML = `
+      <div class="dashboard-activity-empty">
+        Connect a wallet and execute the first payment to populate the live activity preview.
+      </div>
+    `;
+    return;
+  }
+
+  list.innerHTML = entries
+    .map((entry) => `
+      <div class="dashboard-activity-item">
+        <div class="dashboard-activity-main">
+          <div class="dashboard-activity-title">${escapeHtml(entry.title)}</div>
+          <div class="dashboard-activity-meta">
+            <span>${escapeHtml(formatRelativeTime(entry.confirmedAt))}</span>
+            <span class="activity-dot">•</span>
+            <span>${escapeHtml(entry.railStatus || entry.metaLabel || "LIVE")}</span>
+            <span class="activity-dot">•</span>
+            <span class="activity-address">${escapeHtml(maskTrace(entry.txHash || entry.hash || ""))}</span>
+          </div>
+        </div>
+        <div class="dashboard-activity-amount">
+          <strong>${escapeHtml(entry.amountDisplay || "Live")}</strong>
+          <span>${escapeHtml(entry.currency || "LOG")}</span>
+        </div>
+      </div>
+    `)
+    .join("");
+}
+
+function renderActivityList() {
+  const list = document.querySelector("[data-activity-list]");
+  const summary = document.querySelector("[data-payment-history-summary]");
+  const historyRecords = Array.isArray(state.paymentHistory.records)
+    ? state.paymentHistory.records
+    : [];
+  const reconciliationRecords = Array.isArray(state.reconciliationHistory.records)
+    ? state.reconciliationHistory.records
+    : [];
+  const mergedEntries = getMergedActivityEntries();
 
   if (summary) {
-    if (state.paymentHistory.loading) {
-      summary.textContent = "Syncing payment history for the connected wallet...";
-    } else if (state.paymentHistory.error) {
-      summary.textContent = state.paymentHistory.error;
+    if (state.paymentHistory.loading || state.reconciliationHistory.loading) {
+      summary.textContent = "Syncing payment and reconciliation activity for the connected wallet...";
+    } else if (state.paymentHistory.error || state.reconciliationHistory.error) {
+      summary.textContent =
+        state.paymentHistory.error || state.reconciliationHistory.error;
     } else if (state.paymentHistory.wallet) {
-      summary.textContent = `Wallet scope ${shortAddress(state.paymentHistory.wallet)} • ${historyRecords.length} payment record${historyRecords.length === 1 ? "" : "s"} synced`;
+      summary.textContent = `Wallet scope ${shortAddress(state.paymentHistory.wallet)} • ${historyRecords.length} payment record${historyRecords.length === 1 ? "" : "s"} • ${reconciliationRecords.length} reconciliation record${reconciliationRecords.length === 1 ? "" : "s"}`;
     } else {
       summary.textContent = "Connect a wallet to load settled payments from the live payment ledger.";
     }
@@ -3031,6 +3773,7 @@ function renderActivityList() {
         entry.identifiers?.invoiceId ||
         entry.identifiers?.requestId ||
         entry.identifiers?.paymentId ||
+        entry.txHash ||
         entry.hash ||
         "";
       const clickAttrs = canFocusInvoice
@@ -3041,6 +3784,12 @@ function renderActivityList() {
       const clickClass = canFocusInvoice || canOpenUrl ? "is-clickable" : "";
       const metaLabel = entry.metaLabel
         ? `<span class="activity-dot">•</span><span class="activity-tag">${escapeHtml(entry.metaLabel)}</span>`
+        : "";
+      const reviewReason = entry.reviewReason
+        ? `<span class="activity-rail-pill">Reason ${escapeHtml(entry.reviewReason)}</span>`
+        : "";
+      const followUpOwner = entry.followUpOwner
+        ? `<span class="activity-rail-pill">Owner ${escapeHtml(entry.followUpOwner)}</span>`
         : "";
 
       return `
@@ -3063,6 +3812,17 @@ function renderActivityList() {
               <span class="activity-dot">•</span>
               <span class="activity-address">${escapeHtml(maskTrace(addressLabel))}</span>
               ${metaLabel}
+            </div>
+            <div class="activity-rail">
+              <span class="activity-rail-pill">Status ${escapeHtml(entry.railStatus || entry.metaLabel || "LIVE")}</span>
+              <span class="activity-rail-pill">Tx ${escapeHtml(maskTrace(entry.txHash || entry.hash || ""))}</span>
+              ${reviewReason}
+              ${followUpOwner}
+              ${
+                entry.explorerUrl
+                  ? `<a class="activity-rail-link" href="${escapeHtml(entry.explorerUrl)}" target="_blank" rel="noreferrer">Open explorer</a>`
+                  : ""
+              }
             </div>
           </div>
           <div class="activity-amount ${escapeHtml(entry.direction || "neutral")}">
@@ -3102,64 +3862,80 @@ function render() {
   renderComplianceSummary();
   renderAnalyticsSummary();
   renderContractCards();
+  renderDashboardActivityPreview();
   renderActivityList();
   renderViewPanels();
   renderNavigationState();
 }
 
 async function handleCommand(command) {
-  if (command === "connect-wallet") {
-    await handleConnectWallet();
-    return;
-  }
-
-  if (command === "switch-chain") {
-    await handleSwitchChain();
-    return;
-  }
-
-  if (command === "disconnect-wallet") {
-    state.busyCommand = "disconnect-wallet";
-    render();
-    await disconnectWalletSession();
-    state.busyCommand = "";
-    render();
-    return;
-  }
-
-  if (command === "sync-manifest") {
-    await syncManifest();
-    await refreshAppState({ silent: true });
-    return;
-  }
-
-  if (command === "refresh-app") {
-    await refreshAppState();
-    return;
-  }
-
-  if (command === "toggle-balance") {
-    if (state.privateBalance.loaded && state.privateBalance.revealed) {
-      hidePrivateBalance();
-    } else {
-      await handleRevealBalance();
+  try {
+    if (command === "connect-wallet") {
+      await handleConnectWallet();
+      return;
     }
-    return;
-  }
 
-  if (command === "switch-private-quote-chain") {
-    await handleSwitchPrivateQuoteChain();
-    return;
-  }
+    if (command === "switch-chain") {
+      await handleSwitchChain();
+      return;
+    }
 
-  if (command === "copy-private-quote-link") {
-    await handleCopyPrivateQuoteLink();
-    return;
-  }
+    if (command === "disconnect-wallet") {
+      state.busyCommand = "disconnect-wallet";
+      render();
+      await disconnectWalletSession();
+      state.busyCommand = "";
+      render();
+      return;
+    }
 
-  if (command === "clear-activity") {
-    clearRecentActivity();
-    setNotice("Recent activity log cleared for this browser.", "muted");
+    if (command === "sync-manifest") {
+      await syncManifest();
+      await refreshAppState({ silent: true });
+      return;
+    }
+
+    if (command === "refresh-app") {
+      await refreshAppState();
+      return;
+    }
+
+    if (command === "toggle-balance") {
+      if (state.privateBalance.loaded && state.privateBalance.revealed) {
+        hidePrivateBalance();
+      } else {
+        await handleRevealBalance();
+      }
+      return;
+    }
+
+    if (command === "switch-private-quote-chain") {
+      await handleSwitchPrivateQuoteChain();
+      return;
+    }
+
+    if (command === "copy-private-quote-link") {
+      await handleCopyPrivateQuoteLink();
+      return;
+    }
+
+    if (command === "use-invoice-payment-rail") {
+      await handleUseInvoicePaymentRail();
+      return;
+    }
+
+    if (command === "copy-invoice-payment-link") {
+      await handleCopyInvoicePaymentLink();
+      return;
+    }
+
+    if (command === "clear-activity") {
+      clearRecentActivity();
+      setNotice("Recent activity log cleared for this browser.", "muted");
+      render();
+    }
+  } catch (error) {
+    setNotice(error?.message || formatTransactionError(error), "bad");
     render();
   }
 }
@@ -3289,7 +4065,10 @@ function bindEvents() {
       event.preventDefault();
       setActiveView(viewTrigger.dataset.viewTarget);
       if (normalizeView(viewTrigger.dataset.viewTarget) === "activity") {
-        syncPaymentHistory({ silent: true }).then(() => render());
+        Promise.all([
+          syncPaymentHistory({ silent: true }),
+          syncReconciliationRecords({ silent: true }),
+        ]).then(() => render());
       }
       render();
       return;
@@ -3304,7 +4083,10 @@ function bindEvents() {
         event.preventDefault();
         setActiveView(view);
         if (view === "activity") {
-          syncPaymentHistory({ silent: true }).then(() => render());
+          Promise.all([
+            syncPaymentHistory({ silent: true }),
+            syncReconciliationRecords({ silent: true }),
+          ]).then(() => render());
         }
         render();
       }
@@ -3316,6 +4098,12 @@ function bindEvents() {
     if (invoiceFocus) {
       state.forms.monitorInvoice.invoiceId = invoiceFocus.dataset.selectInvoice;
       setActiveView("invoices");
+      syncReconciliationRecords({
+        silent: true,
+        invoiceId: invoiceFocus.dataset.selectInvoice,
+      })
+        .then(() => syncInvoiceReconciliationDetail(invoiceFocus.dataset.selectInvoice))
+        .then(() => render());
       render();
       return;
     }
@@ -3349,12 +4137,27 @@ function bindEvents() {
   window.addEventListener("hashchange", () => {
     setActiveView(window.location.hash, { updateHash: false, scrollTop: false });
     if (normalizeView(window.location.hash) === "activity") {
-      syncPaymentHistory({ silent: true }).then(() => render());
+      Promise.all([
+        syncPaymentHistory({ silent: true }),
+        syncReconciliationRecords({ silent: true }),
+      ]).then(() => render());
     }
     render();
   });
 
   window.addEventListener("storage", async (event) => {
+    if (
+      event.key === WALLET_SESSION_STORAGE_KEY ||
+      event.key === WALLET_PROVIDER_STORAGE_KEY
+    ) {
+      await refreshAppState({
+        silent: true,
+        walletId: getStoredWalletProviderId() || state.runtime.walletId,
+      });
+      render();
+      return;
+    }
+
     if (event.key === PRIVATE_QUOTE_STORE_MODE_STORAGE_KEY) {
       await syncReceiptStoreMode(getPrivateQuoteStoreMode(), { syncUrl: false });
       render();

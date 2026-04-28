@@ -23,17 +23,24 @@ contract HexaPayWorkflowWriteDelegate {
     error InvalidApprovals();
     error InvalidCore();
     error InvalidDueDate();
+    error InvalidExternalSettlement();
+    error InvalidExternalSettlementAmount();
+    error InvalidExternalSettlementBridge();
     error InvalidFrequency();
     error InvalidEmployee();
     error InvalidSigner();
+    error ExternalSettlementAlreadyApplied();
+    error ExternalSettlementAlreadyRecorded();
     error InvoiceAlreadyFunded();
     error InvoiceNotCancellable();
     error InvoiceNotEditable();
     error InvoiceNotPayable();
     error LengthMismatch();
     error NoEmployees();
+    error NotCoreOwner();
     error NotCompanyOperator();
     error NotCompanyOwner();
+    error NotExternalSettlementBridge();
     error NotInvoiceOperator();
     error NotInvoicePayer();
     error NotPolicySigner();
@@ -44,6 +51,7 @@ contract HexaPayWorkflowWriteDelegate {
     error ReentrancyBlocked();
     error ScheduleNotActive();
     error UnknownAction();
+    error UnknownExternalSettlement();
     error UnknownInvoice();
     error UnknownSchedule();
     error UnsupportedAction();
@@ -112,6 +120,23 @@ contract HexaPayWorkflowWriteDelegate {
         bool active;
     }
 
+    struct ExternalSettlementReceipt {
+        bytes32 settlementId;
+        bytes32 invoiceId;
+        bytes32 intentHash;
+        bytes32 requestIdHash;
+        bytes32 txHash;
+        address payerWallet;
+        address merchant;
+        address token;
+        uint128 observedAmount;
+        uint128 appliedAmount;
+        uint64 recordedAt;
+        uint64 appliedAt;
+        bool applied;
+        bool exists;
+    }
+
     IHexaPayCore public immutable core;
 
     mapping(bytes32 => Invoice) private invoices;
@@ -133,6 +158,9 @@ contract HexaPayWorkflowWriteDelegate {
 
     mapping(bytes32 => PayrollSchedule) private payrollSchedules;
     mapping(address => bytes32[]) private employerSchedules;
+    address public externalSettlementBridge;
+    mapping(bytes32 => ExternalSettlementReceipt) private externalSettlementReceipts;
+    mapping(bytes32 => bytes32[]) private invoiceExternalSettlementIds;
 
     uint256 private scheduleNonce;
     uint256 private invoiceNonce;
@@ -141,6 +169,22 @@ contract HexaPayWorkflowWriteDelegate {
 
     event InvoiceCancelled(bytes32 indexed invoiceId);
     event InvoicePaymentApplied(bytes32 indexed invoiceId, bytes32 indexed paymentId, uint32 paymentCount);
+    event ExternalSettlementBridgeUpdated(address indexed previousBridge, address indexed nextBridge);
+    event InvoiceExternalSettlementReceiptRecorded(
+        bytes32 indexed invoiceId,
+        bytes32 indexed settlementId,
+        bytes32 indexed intentHash,
+        bytes32 requestIdHash,
+        bytes32 txHash,
+        address payerWallet,
+        uint256 observedAmount
+    );
+    event InvoiceExternalSettlementApplied(
+        bytes32 indexed invoiceId,
+        bytes32 indexed settlementId,
+        uint256 appliedAmount,
+        address indexed operator
+    );
     event PolicyRuleUpdated(
         address indexed company,
         PolicyActionType actionType,
@@ -219,6 +263,120 @@ contract HexaPayWorkflowWriteDelegate {
         ) revert PolicyApprovalRequired();
 
         paymentId = _settleInvoicePayment(invoiceId, FHE.asEuint128(encryptedAmount));
+    }
+
+    function setExternalSettlementBridge(address bridge) external {
+        if (msg.sender != core.owner()) revert NotCoreOwner();
+        if (bridge == address(0)) revert InvalidExternalSettlementBridge();
+
+        address previousBridge = externalSettlementBridge;
+        externalSettlementBridge = bridge;
+
+        emit ExternalSettlementBridgeUpdated(previousBridge, bridge);
+    }
+
+    function recordExternalSettlementReceipt(
+        bytes32 invoiceId,
+        bytes32 settlementId,
+        bytes32 intentHash,
+        bytes32 requestIdHash,
+        bytes32 txHash,
+        address payerWallet,
+        address merchant,
+        address token,
+        uint128 observedAmount
+    ) external {
+        if (msg.sender != externalSettlementBridge) revert NotExternalSettlementBridge();
+        if (
+            invoiceId == bytes32(0) ||
+            settlementId == bytes32(0) ||
+            intentHash == bytes32(0) ||
+            requestIdHash == bytes32(0) ||
+            txHash == bytes32(0) ||
+            payerWallet == address(0) ||
+            merchant == address(0) ||
+            token == address(0) ||
+            observedAmount == 0
+        ) revert InvalidExternalSettlement();
+
+        Invoice storage invoice = invoices[invoiceId];
+        if (!invoice.exists) revert UnknownInvoice();
+        if (externalSettlementReceipts[settlementId].exists) revert ExternalSettlementAlreadyRecorded();
+        if (merchant != invoice.company) revert InvalidExternalSettlement();
+        if (token != core.settlementToken()) revert InvalidExternalSettlement();
+        if (!_canActForInvoicePayer(invoice.payer, payerWallet)) revert InvalidExternalSettlement();
+
+        externalSettlementReceipts[settlementId] = ExternalSettlementReceipt({
+            settlementId: settlementId,
+            invoiceId: invoiceId,
+            intentHash: intentHash,
+            requestIdHash: requestIdHash,
+            txHash: txHash,
+            payerWallet: payerWallet,
+            merchant: merchant,
+            token: token,
+            observedAmount: observedAmount,
+            appliedAmount: 0,
+            recordedAt: uint64(block.timestamp),
+            appliedAt: 0,
+            applied: false,
+            exists: true
+        });
+        invoiceExternalSettlementIds[invoiceId].push(settlementId);
+
+        emit InvoiceExternalSettlementReceiptRecorded(
+            invoiceId,
+            settlementId,
+            intentHash,
+            requestIdHash,
+            txHash,
+            payerWallet,
+            observedAmount
+        );
+    }
+
+    function applyExternalSettlementReceipt(bytes32 settlementId, uint128 clearAmount)
+        external
+        nonReentrant
+        returns (bytes32 invoiceId)
+    {
+        if (clearAmount == 0) revert InvalidExternalSettlementAmount();
+
+        ExternalSettlementReceipt storage receipt = externalSettlementReceipts[settlementId];
+        if (!receipt.exists) revert UnknownExternalSettlement();
+        if (receipt.applied) revert ExternalSettlementAlreadyApplied();
+
+        invoiceId = receipt.invoiceId;
+        Invoice storage invoice = invoices[invoiceId];
+        if (!invoice.exists) revert UnknownInvoice();
+        if (!core.isCompanyOperator(invoice.company, msg.sender)) revert NotCompanyOperator();
+        if (
+            invoice.status != InvoiceStatus.Approved &&
+            invoice.status != InvoiceStatus.PartiallyPaid
+        ) revert InvoiceNotPayable();
+
+        uint128 normalizedClearAmount =
+            clearAmount <= receipt.observedAmount ? clearAmount : receipt.observedAmount;
+        if (normalizedClearAmount == 0) revert InvalidExternalSettlementAmount();
+
+        euint128 safeAmount = FHE.min(
+            _sanitizePositive(FHE.asEuint128(normalizedClearAmount)),
+            invoiceOutstanding[invoiceId]
+        );
+        uint128 appliedAmount = uint128(euint128.unwrap(safeAmount));
+        if (appliedAmount == 0) revert InvalidExternalSettlementAmount();
+
+        invoiceOutstanding[invoiceId] = FHE.sub(invoiceOutstanding[invoiceId], safeAmount);
+        _refreshInvoiceHandles(invoiceId);
+        _allowAnalyticsHandle(safeAmount);
+        IHexaPayAnalytics(core.analyticsModule()).decreaseInvoiceExposure(invoice.company, safeAmount);
+        invoice.status = InvoiceStatus.PartiallyPaid;
+
+        receipt.applied = true;
+        receipt.appliedAt = uint64(block.timestamp);
+        receipt.appliedAmount = appliedAmount;
+
+        emit InvoiceExternalSettlementApplied(invoiceId, settlementId, appliedAmount, msg.sender);
     }
 
     function setPolicyRule(

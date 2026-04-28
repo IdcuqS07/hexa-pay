@@ -42,6 +42,31 @@ Optional for CLI live testing:
 TEST_PAYER_PRIVATE_KEY=0x...
 ```
 
+Optional for invoice-linked reconciliation:
+
+```bash
+# default: best-effort verifier, invoice context read is optional
+HEXAPAY_REQUIRE_INVOICE_CONTEXT=0
+HEXAPAY_RECONCILIATION_RPC_URL=https://sepolia-rollup.arbitrum.io/rpc
+HEXAPAY_EXTERNAL_SETTLEMENT_BRIDGE_ADDRESS=0x...
+```
+
+## Invoice Context Mode
+
+`HEXAPAY_REQUIRE_INVOICE_CONTEXT` changes how strict the backend verifier is for invoice-linked settlements.
+
+- Default behavior:
+  `HEXAPAY_REQUIRE_INVOICE_CONTEXT` unset or `0`
+  The verifier still trusts canonical `receiptId = invoiceId`, executor settlement proof, and `deployment.json` address discovery.
+  Direct `workflow.getInvoice(...)` reads are treated as optional enrichment because invoice access is not permissionless.
+- Strict mode behavior:
+  `HEXAPAY_REQUIRE_INVOICE_CONTEXT=1`
+  The verifier must successfully resolve invoice context from workflow before it accepts the reconciliation candidate.
+- When to use strict mode:
+  Only when the backend signer or reader is guaranteed invoice access, for example on merchant-operated staging or production services with the right workflow permissions.
+- When to keep default mode:
+  Local dev, shared staging, or any backend where invoice read access may legitimately return `NoInvoiceAccess`.
+
 Start the local server:
 
 ```bash

@@ -8,6 +8,12 @@ const {
   createExecutionDedupeStore,
   createMemoryExecutionDedupeStore,
 } = require("./payment-intent-dedupe-store.cjs");
+const {
+  assertInvoiceIntentBinding,
+} = require("./payment-intent-invoice-binding.cjs");
+const {
+  createPaymentReconciliationWorker,
+} = require("./payment-reconciliation-worker.cjs");
 
 function nowMs() {
   return Date.now();
@@ -27,6 +33,40 @@ function normalizeExecutionKey(intent) {
 
 function isDuplicateLedgerStatus(status) {
   return ["signed", "executing", "settled"].includes(String(status || "").toLowerCase());
+}
+
+function validateIntentAgainstChallengeRecord(intent = {}, challengeRecord = null) {
+  if (!challengeRecord || typeof challengeRecord !== "object") {
+    return;
+  }
+
+  const comparableFields = [
+    "challengeId",
+    "receiptId",
+    "quoteId",
+    "merchantId",
+    "terminalId",
+    "payer",
+    "merchant",
+    "amount",
+    "currency",
+  ];
+
+  for (const field of comparableFields) {
+    const challengeValue = String(challengeRecord[field] || "");
+    const intentValue = String(intent[field] || "");
+
+    if (String(challengeValue).toLowerCase() !== String(intentValue).toLowerCase()) {
+      const error = new Error(`Intent ${field} does not match the issued challenge.`);
+      error.code = "challenge_intent_mismatch";
+      error.details = {
+        field,
+        challengeValue,
+        intentValue,
+      };
+      throw error;
+    }
+  }
 }
 
 function createEvmExecutor({
@@ -99,6 +139,21 @@ function createPaymentIntentService(options = {}) {
     options.executionDedupeStore || createExecutionDedupeStore();
   const executor = options.executor;
   const paymentLedger = options.paymentLedger || null;
+  const paymentReconciliationWorker =
+    options.reconciliationWorker ||
+    (paymentLedger &&
+    (options.reconciliationStore ||
+      options.reconciliationRecorder ||
+      options.recordHandler ||
+      options.executorAddress)
+      ? createPaymentReconciliationWorker({
+          paymentLedger,
+          reconciliationStore: options.reconciliationStore,
+          reconciliationRecorder: options.reconciliationRecorder || options.recordHandler,
+          chainId: options.chainId,
+          executorAddress: options.executorAddress,
+        })
+      : null);
   const domain = buildIntentDomain({
     chainId: options.chainId,
     verifyingContract: options.verifyingContract,
@@ -111,6 +166,10 @@ function createPaymentIntentService(options = {}) {
   }
 
   async function createChallenge(input = {}) {
+    const binding = assertInvoiceIntentBinding({
+      receiptId: input.receiptId,
+      invoiceId: input.invoiceId,
+    });
     const challengeToken = `challenge-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const issuedAt = Date.now();
     const expiresAt = issuedAt + 300000; // 5 minutes
@@ -135,7 +194,8 @@ function createPaymentIntentService(options = {}) {
     const challengeRecord = {
       challengeId: challengeToken,
       requestId: input.requestId,
-      receiptId: input.receiptId,
+      receiptId: binding.receiptId,
+      invoiceId: binding.invoiceId,
       quoteId: input.quoteId,
       merchantId: input.merchantId,
       terminalId: input.terminalId,
@@ -156,6 +216,9 @@ function createPaymentIntentService(options = {}) {
   }
 
   async function executeSignedIntent({ intent, signature }) {
+    const binding = assertInvoiceIntentBinding({
+      receiptId: intent?.receiptId,
+    });
     requiredString(intent?.challengeId, "intent.challengeId");
     requiredString(intent?.requestId, "intent.requestId");
     requiredString(intent?.merchantId, "intent.merchantId");
@@ -192,6 +255,7 @@ function createPaymentIntentService(options = {}) {
     const existingRecord = paymentLedger?.getByRequestId
       ? await Promise.resolve(paymentLedger.getByRequestId(intent.requestId))
       : null;
+    validateIntentAgainstChallengeRecord(intent, existingRecord);
     const duplicateFromLedger = isDuplicateLedgerStatus(existingRecord?.status);
     let executionClaimed = false;
 
@@ -233,6 +297,7 @@ function createPaymentIntentService(options = {}) {
           intentHash: signatureResult.intentHash,
           requestIdHash: hashRequestId(intent.requestId),
           signedAt: now,
+          invoiceId: binding.invoiceId,
         }),
       );
     }
@@ -266,6 +331,7 @@ function createPaymentIntentService(options = {}) {
           intentHash,
           requestIdHash,
           executingAt: nowMs(),
+          invoiceId: binding.invoiceId,
         }),
       );
     }
@@ -283,6 +349,7 @@ function createPaymentIntentService(options = {}) {
             intentHash,
             requestIdHash,
             failedAt: nowMs(),
+            invoiceId: binding.invoiceId,
           }),
         );
       }
@@ -314,6 +381,7 @@ function createPaymentIntentService(options = {}) {
             intentHash,
             requestIdHash,
             failedAt: nowMs(),
+            invoiceId: binding.invoiceId,
           }),
         );
       }
@@ -348,6 +416,7 @@ function createPaymentIntentService(options = {}) {
           intentHash,
           requestIdHash,
           settledAt: nowMs(),
+          invoiceId: binding.invoiceId,
         }),
       );
     }
@@ -377,12 +446,36 @@ function createPaymentIntentService(options = {}) {
         merchant: String(filters.merchant || ""),
         payer: String(filters.payer || ""),
         status: String(filters.status || ""),
+        invoiceId: String(filters.invoiceId || ""),
         limit: Math.max(0, Number.parseInt(String(filters.limit || 0), 10) || 0),
       },
       summary: {
         totalCount: 0,
         returnedCount: 0,
         byStatus: {},
+        updatedAt: Date.now(),
+      },
+      records: [],
+    };
+  }
+
+  async function listReconciliationCandidates(filters = {}) {
+    if (paymentLedger?.listReconciliationCandidates) {
+      return await Promise.resolve(paymentLedger.listReconciliationCandidates(filters));
+    }
+
+    return {
+      status: "ok",
+      statusCode: 200,
+      filters: {
+        invoiceId: String(filters.invoiceId || ""),
+        limit: Math.max(0, Number.parseInt(String(filters.limit || 0), 10) || 0),
+        eligibleOnly: filters.eligibleOnly !== false,
+      },
+      summary: {
+        totalInvoiceLinked: 0,
+        eligibleCount: 0,
+        returnedCount: 0,
         updatedAt: Date.now(),
       },
       records: [],
@@ -415,12 +508,110 @@ function createPaymentIntentService(options = {}) {
     };
   }
 
+  async function listReconciliationRecords(filters = {}) {
+    if (paymentReconciliationWorker?.listRecords) {
+      return await Promise.resolve(paymentReconciliationWorker.listRecords(filters));
+    }
+
+    return {
+      status: "ok",
+      statusCode: 200,
+      filters: {
+        wallet: String(filters.wallet || ""),
+        merchant: String(filters.merchant || ""),
+        payer: String(filters.payer || ""),
+        state: String(filters.state || ""),
+        recordId: String(filters.recordId || ""),
+        settlementId: String(filters.settlementId || ""),
+        requestId: String(filters.requestId || ""),
+        txHash: String(filters.txHash || ""),
+        invoiceId: String(filters.invoiceId || ""),
+        limit: Math.max(0, Number.parseInt(String(filters.limit || 0), 10) || 0),
+      },
+      summary: {
+        totalCount: 0,
+        returnedCount: 0,
+        byState: {},
+        updatedAt: Date.now(),
+      },
+      authority: {
+        accounting: "workflow_contract",
+        orchestration: "payment_reconciliation_store",
+        settlementSource: "executor_chain",
+      },
+      records: [],
+    };
+  }
+
+  async function runReconciliation(filters = {}) {
+    if (paymentReconciliationWorker?.runOnce) {
+      return await Promise.resolve(paymentReconciliationWorker.runOnce(filters));
+    }
+
+    return {
+      status: "ok",
+      statusCode: 200,
+      filters: {
+        invoiceId: String(filters.invoiceId || ""),
+        limit: Math.max(0, Number.parseInt(String(filters.limit || 0), 10) || 0),
+        autoRecord: filters.autoRecord !== false,
+        retryExceptions: filters.retryExceptions !== false,
+      },
+      summary: {
+        scannedCount: 0,
+        observedCount: 0,
+        eligibleCount: 0,
+        submittedCount: 0,
+        recordedCount: 0,
+        appliedCount: 0,
+        exceptionCount: 0,
+        skippedCount: 0,
+        updatedAt: Date.now(),
+      },
+      authority: {
+        accounting: "workflow_contract",
+        orchestration: "payment_reconciliation_store",
+        settlementSource: "executor_chain",
+      },
+      records: [],
+    };
+  }
+
+  async function getPaymentReconciliationSnapshot({ includeRecords = false } = {}) {
+    if (paymentReconciliationWorker?.getSnapshot) {
+      return await Promise.resolve(paymentReconciliationWorker.getSnapshot({ includeRecords }));
+    }
+
+    return {
+      status: "ok",
+      statusCode: 200,
+      summary: {
+        totalCount: 0,
+        byState: {},
+        updatedAt: Date.now(),
+      },
+      authority: {
+        accounting: "workflow_contract",
+        orchestration: "payment_reconciliation_store",
+        settlementSource: "executor_chain",
+      },
+      records: [],
+      storage: { kind: "memory" },
+    };
+  }
+
   return {
     domain,
     createChallenge,
     executeSignedIntent,
     listPayments,
+    listReconciliationCandidates,
+    listReconciliationRecords,
+    runReconciliation,
     getPaymentLedgerSnapshot,
+    getPaymentReconciliationSnapshot,
+    paymentLedger,
+    paymentReconciliationWorker,
   };
 }
 
