@@ -53,6 +53,7 @@ const PAYMENT_INTENT_TYPES = {
     { name: "requestId", type: "string" },
     { name: "receiptId", type: "string" },
     { name: "quoteId", type: "string" },
+    { name: "source", type: "string" },
     { name: "merchantId", type: "string" },
     { name: "terminalId", type: "string" },
     { name: "payer", type: "address" },
@@ -253,6 +254,7 @@ function buildIntent({
   requestId,
   receiptId,
   quoteId,
+  source = "",
   merchantId,
   terminalId,
   payer,
@@ -269,6 +271,7 @@ function buildIntent({
     requestId: String(requestId),
     receiptId: String(receiptId || ""),
     quoteId: String(quoteId || ""),
+    source: String(source || ""),
     merchantId: String(merchantId),
     terminalId: String(terminalId),
     payer: String(payer),
@@ -837,7 +840,12 @@ export function mountPaymentIntentWidget(container, options = {}) {
         renderConnectedWallet(payer);
       }
 
-      const requestId = createRequestId();
+      const requestId = String(options.requestId || createRequestId()).trim();
+
+      if (!requestId) {
+        throw new Error("Request ID tidak valid.");
+      }
+
       outputs.requestId.textContent = shortHash(requestId);
 
       setStatus("creating_challenge");
@@ -851,9 +859,10 @@ export function mountPaymentIntentWidget(container, options = {}) {
           receiptId: getResolvedReceiptId(),
           invoiceId: getLinkedInvoiceId(),
           quoteId: fields.quoteId.value,
+          source: options.source || "",
           merchantId: fields.merchantId.value,
           terminalId: fields.terminalId.value,
-          amount: fields.amount.value,
+          amount: String(parseUnits(String(fields.amount.value || "0"), USDC_ASSET.decimals)),
           currency: fields.currency.value,
           payer,
           merchant: fields.merchantAddress.value,
@@ -889,6 +898,7 @@ export function mountPaymentIntentWidget(container, options = {}) {
         requestId,
         receiptId: getResolvedReceiptId(),
         quoteId: fields.quoteId.value,
+        source: options.source || "",
         merchantId: fields.merchantId.value,
         terminalId: fields.terminalId.value,
         payer,

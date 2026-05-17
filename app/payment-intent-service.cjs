@@ -27,6 +27,25 @@ function requiredString(value, name) {
   return v;
 }
 
+function normalizeIntentSource(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function validateRealWorldIntentContext(input = {}, { phase = "intent" } = {}) {
+  const source = normalizeIntentSource(input.source);
+
+  if (source !== "pos") {
+    return source;
+  }
+
+  requiredString(input.merchantId, `${phase}.merchantId`);
+  requiredString(input.terminalId, `${phase}.terminalId`);
+  requiredString(input.sessionId, `${phase}.sessionId`);
+  requiredString(input.deviceFingerprintHash, `${phase}.deviceFingerprintHash`);
+
+  return source;
+}
+
 function normalizeExecutionKey(intent) {
   return `${intent.merchantId}:${intent.terminalId}:${intent.requestId}`;
 }
@@ -44,6 +63,7 @@ function validateIntentAgainstChallengeRecord(intent = {}, challengeRecord = nul
     "challengeId",
     "receiptId",
     "quoteId",
+    "source",
     "merchantId",
     "terminalId",
     "payer",
@@ -53,7 +73,11 @@ function validateIntentAgainstChallengeRecord(intent = {}, challengeRecord = nul
   ];
 
   for (const field of comparableFields) {
-    const challengeValue = String(challengeRecord[field] || "");
+    const challengeValue = String(
+      field === "source"
+        ? challengeRecord.intentSource || challengeRecord.source || ""
+        : challengeRecord[field] || "",
+    );
     const intentValue = String(intent[field] || "");
 
     if (String(challengeValue).toLowerCase() !== String(intentValue).toLowerCase()) {
@@ -170,6 +194,7 @@ function createPaymentIntentService(options = {}) {
       receiptId: input.receiptId,
       invoiceId: input.invoiceId,
     });
+    const source = validateRealWorldIntentContext(input, { phase: "challenge" });
     const challengeToken = `challenge-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const issuedAt = Date.now();
     const expiresAt = issuedAt + 300000; // 5 minutes
@@ -197,12 +222,15 @@ function createPaymentIntentService(options = {}) {
       receiptId: binding.receiptId,
       invoiceId: binding.invoiceId,
       quoteId: input.quoteId,
+      source,
       merchantId: input.merchantId,
       terminalId: input.terminalId,
       amount: String(input.amount),
       currency: input.currency,
       payer: input.payer,
       merchant: input.merchant,
+      sessionId: input.sessionId || "",
+      deviceFingerprintHash: input.deviceFingerprintHash || "",
       issuedAtMs: issuedAt,
       expiresAtMs: expiresAt,
       domain,
@@ -219,6 +247,7 @@ function createPaymentIntentService(options = {}) {
     const binding = assertInvoiceIntentBinding({
       receiptId: intent?.receiptId,
     });
+    validateRealWorldIntentContext(intent, { phase: "intent" });
     requiredString(intent?.challengeId, "intent.challengeId");
     requiredString(intent?.requestId, "intent.requestId");
     requiredString(intent?.merchantId, "intent.merchantId");
@@ -446,6 +475,7 @@ function createPaymentIntentService(options = {}) {
         merchant: String(filters.merchant || ""),
         payer: String(filters.payer || ""),
         status: String(filters.status || ""),
+        requestId: String(filters.requestId || ""),
         invoiceId: String(filters.invoiceId || ""),
         limit: Math.max(0, Number.parseInt(String(filters.limit || 0), 10) || 0),
       },

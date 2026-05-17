@@ -42,6 +42,7 @@ const PAYMENT_INTENT_TYPES = {
     { name: "requestId", type: "string" },
     { name: "receiptId", type: "string" },
     { name: "quoteId", type: "string" },
+    { name: "source", type: "string" },
     { name: "merchantId", type: "string" },
     { name: "terminalId", type: "string" },
     { name: "payer", type: "address" },
@@ -63,6 +64,7 @@ interface PaymentIntent {
   requestId: string;
   receiptId: string;
   quoteId: string;
+  source: string;
   merchantId: string;
   terminalId: string;
   payer: string;
@@ -89,6 +91,7 @@ interface ChallengeInput {
   requestId: string;
   receiptId: string;
   quoteId: string;
+  source?: string;
   merchantId: string;
   terminalId: string;
   amount: string;
@@ -234,7 +237,10 @@ export async function ensurePaymentTokenApproval(humanAmount: string): Promise<a
 export async function createPaymentChallenge(input: ChallengeInput, context: ChallengeContext = {}): Promise<any> {
   return postJson(
     "/api/payments/challenges",
-    input,
+    {
+      ...input,
+      amount: String(parseUnits(String(input.amount || "0"), PAYMENT_ASSET.decimals)),
+    },
     {
       ...(context.permitHash ? { "x-receipt-permit-hash": context.permitHash } : {}),
       ...(context.sessionId ? { "x-session-id": context.sessionId } : {}),
@@ -258,6 +264,7 @@ export function buildPaymentIntent({
   requestId,
   receiptId,
   quoteId,
+  source = "",
   merchantId,
   terminalId,
   payer,
@@ -273,6 +280,7 @@ export function buildPaymentIntent({
   requestId: string;
   receiptId: string;
   quoteId: string;
+  source?: string;
   merchantId: string;
   terminalId: string;
   payer: string;
@@ -291,6 +299,7 @@ export function buildPaymentIntent({
     requestId: String(requestId),
     receiptId: String(receiptId || ""),
     quoteId: String(quoteId || ""),
+    source: String(source || ""),
     merchantId: String(merchantId),
     terminalId: String(terminalId),
     payer,

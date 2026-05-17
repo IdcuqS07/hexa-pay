@@ -128,6 +128,7 @@ function normalizeRecord(record = {}) {
     invoiceBindingSource: normalizeString(record.invoiceBindingSource || invoiceBinding.bindingSource),
     invoiceBindingStatus,
     quoteId: normalizeString(record.quoteId),
+    intentSource: normalizeString(record.intentSource),
     merchantId: normalizeString(record.merchantId),
     terminalId: normalizeString(record.terminalId),
     payer: normalizeString(record.payer),
@@ -273,6 +274,11 @@ function matchesStatus(record, status) {
   return normalizeString(record.status) === normalizeString(status);
 }
 
+function matchesRequestId(record, requestId) {
+  if (!requestId) return true;
+  return normalizeString(record.requestId) === normalizeString(requestId);
+}
+
 function matchesInvoiceId(record, invoiceId) {
   if (!invoiceId) return true;
   const needle = normalizeCanonicalInvoiceId(invoiceId);
@@ -333,6 +339,7 @@ class MemoryPaymentLedger {
       receiptId: challenge.receiptId,
       invoiceId: challenge.invoiceId,
       quoteId: challenge.quoteId,
+      intentSource: challenge.source,
       merchantId: challenge.merchantId,
       terminalId: challenge.terminalId,
       payer: challenge.payer,
@@ -353,6 +360,7 @@ class MemoryPaymentLedger {
       receiptId: intent.receiptId,
       invoiceId: details.invoiceId,
       quoteId: intent.quoteId,
+      intentSource: intent.source,
       merchantId: intent.merchantId,
       terminalId: intent.terminalId,
       payer: intent.payer,
@@ -378,6 +386,7 @@ class MemoryPaymentLedger {
       receiptId: intent.receiptId,
       invoiceId: details.invoiceId,
       quoteId: intent.quoteId,
+      intentSource: intent.source,
       merchantId: intent.merchantId,
       terminalId: intent.terminalId,
       payer: intent.payer,
@@ -403,6 +412,7 @@ class MemoryPaymentLedger {
       receiptId: intent.receiptId,
       invoiceId: details.invoiceId,
       quoteId: intent.quoteId,
+      intentSource: intent.source,
       merchantId: intent.merchantId,
       terminalId: intent.terminalId,
       payer: intent.payer,
@@ -432,6 +442,7 @@ class MemoryPaymentLedger {
       receiptId: intent.receiptId,
       invoiceId: details.invoiceId,
       quoteId: intent.quoteId,
+      intentSource: intent.source,
       merchantId: intent.merchantId,
       terminalId: intent.terminalId,
       payer: intent.payer,
@@ -476,6 +487,7 @@ class MemoryPaymentLedger {
         matchesMerchant(record, filters.merchant) &&
         matchesPayer(record, filters.payer) &&
         matchesStatus(record, filters.status) &&
+        matchesRequestId(record, filters.requestId) &&
         matchesInvoiceId(record, filters.invoiceId)
       );
     });
@@ -491,6 +503,7 @@ class MemoryPaymentLedger {
         merchant: normalizeString(filters.merchant),
         payer: normalizeString(filters.payer),
         status: normalizeString(filters.status),
+        requestId: normalizeString(filters.requestId),
         invoiceId: normalizeCanonicalInvoiceId(filters.invoiceId),
         limit,
       },

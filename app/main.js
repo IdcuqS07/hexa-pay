@@ -1,4 +1,5 @@
 import { formatUnits } from "ethers";
+import QRCode from "qrcode";
 import {
   DEFAULT_CHAIN_ID,
   getAddressConfig,
@@ -68,6 +69,9 @@ import {
 import * as reconciliationUi from "./payment-reconciliation-ui.js";
 
 const RECENT_ACTIVITY_STORAGE_KEY = "hexapay_recent_activity_v1";
+const POS_REQUEST_STORAGE_KEY = "hexapay_pos_request_v1";
+const POS_REQUEST_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const POS_REQUEST_STATUS_POLL_INTERVAL_MS = 15_000;
 const APP_VIEWS = new Set([
   "dashboard",
   "send",
@@ -121,6 +125,8 @@ const state = {
   latestAuditorReceipt: null,
   allowReceiptGrantSignature: false,
   privateQuoteResult: null,
+  posRequest: null,
+  posRequestStatus: createDefaultPosRequestStatus(),
   notice: {
     tone: "muted",
     summary:
@@ -147,6 +153,8 @@ let receiptStore = createReceiptStore(receiptStoreMode, {
     }),
 });
 let receiptStoreChangeKey = getReceiptStoreChangeKey(receiptStoreMode);
+let posRequestStatusPollTimer = null;
+let posRequestStatusPollInFlight = false;
 
 function isReceiptAccessDeniedError(error, codes = []) {
   if (!error || Number(error.statusCode || 0) !== 403) {
@@ -208,6 +216,16 @@ function createDefaultPrivateBalance() {
   };
 }
 
+function createDefaultPosRequestStatus() {
+  return {
+    loading: false,
+    error: "",
+    payment: null,
+    reconciliation: null,
+    syncedAt: 0,
+  };
+}
+
 function createDefaultForms() {
   const dueAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const localDueAt = new Date(dueAt.getTime() - dueAt.getTimezoneOffset() * 60 * 1000)
@@ -239,6 +257,12 @@ function createDefaultForms() {
     privateQuote: {
       payer: "",
       amount: "1",
+    },
+    posMode: {
+      terminalLabel: "Front Counter",
+      terminalId: "terminal-front-01",
+      amount: "12.50",
+      customerNote: "",
     },
     monitorInvoice: {
       invoiceId: "",
@@ -338,6 +362,7 @@ function updateViewHash(view) {
 function setActiveView(view, { updateHash = true, scrollTop = true } = {}) {
   const normalized = normalizeView(view);
   state.activeView = normalized;
+  syncPosRequestStatusPolling({ forceRefresh: normalized === "private-quotes" });
 
   if (updateHash) {
     updateViewHash(normalized);
@@ -434,6 +459,159 @@ function loadRecentActivity() {
   }
 }
 
+function normalizeStoredPosRequest(value = {}) {
+  if (!value || typeof value !== "object" || typeof window === "undefined") {
+    return null;
+  }
+
+  const payload = createShareablePaymentIntentPayload(value.payload || value);
+  const settlementSource =
+    value.settlement && typeof value.settlement === "object" ? value.settlement : {};
+  const settlement = {
+    symbol: String(settlementSource.symbol || payload.currency || "USDC"),
+    decimals: Math.max(0, Number.parseInt(String(settlementSource.decimals || 6), 10) || 6),
+    tokenAddress: String(settlementSource.tokenAddress || ""),
+    vaultAddress: String(settlementSource.vaultAddress || ""),
+  };
+  const createdAt = Math.max(
+    0,
+    Number.parseInt(String(value.createdAt || payload.createdAt || 0), 10) || 0,
+  );
+  const normalizedAmount = String(value.normalizedAmount || payload.amount || "").trim();
+  const requestId = String(value.requestId || payload.requestId || "").trim();
+  const merchantId = String(value.merchantId || payload.merchantId || "").trim();
+  const terminalId = String(value.terminalId || payload.terminalId || "").trim();
+  const terminalLabel = String(value.terminalLabel || payload.terminalLabel || "").trim();
+  const customerNote = String(value.customerNote || payload.customerNote || "").trim();
+  const sessionId = String(value.sessionId || payload.sessionId || "").trim();
+  const deviceFingerprintHash = String(
+    value.deviceFingerprintHash || payload.deviceFingerprintHash || "",
+  ).trim();
+  const merchantAddress = String(value.merchantAddress || payload.merchantAddress || "").trim();
+  const baseUrl = createShareablePaymentIntentUrl(
+    payload,
+    `${window.location.origin}/pay.html`,
+  );
+  const linkUrl = String(value.linkUrl || appendPaymentEntry(baseUrl, "direct")).trim();
+  const qrUrl = String(value.qrUrl || appendPaymentEntry(baseUrl, "qr")).trim();
+  const qrDataUrl = String(value.qrDataUrl || "").trim();
+
+  if (
+    !requestId ||
+    !merchantId ||
+    !terminalId ||
+    !merchantAddress ||
+    !normalizedAmount ||
+    !sessionId ||
+    !deviceFingerprintHash ||
+    !linkUrl ||
+    !qrUrl
+  ) {
+    return null;
+  }
+
+  return {
+    settlement,
+    merchantAddress,
+    merchantId,
+    requestId,
+    terminalId,
+    terminalLabel: terminalLabel || "Front Counter",
+    customerNote,
+    sessionId,
+    deviceFingerprintHash,
+    normalizedAmount,
+    payload,
+    linkUrl,
+    qrUrl,
+    qrDataUrl,
+    createdAt,
+  };
+}
+
+function loadStoredPosRequest() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(POS_REQUEST_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    const normalized = normalizeStoredPosRequest(parsed);
+
+    if (!normalized) {
+      window.localStorage.removeItem(POS_REQUEST_STORAGE_KEY);
+      return null;
+    }
+
+    if (normalized.createdAt && Date.now() - normalized.createdAt > POS_REQUEST_MAX_AGE_MS) {
+      window.localStorage.removeItem(POS_REQUEST_STORAGE_KEY);
+      return null;
+    }
+
+    return normalized;
+  } catch (error) {
+    window.localStorage.removeItem(POS_REQUEST_STORAGE_KEY);
+    return null;
+  }
+}
+
+function saveStoredPosRequest() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (!state.posRequest) {
+    window.localStorage.removeItem(POS_REQUEST_STORAGE_KEY);
+    return;
+  }
+
+  window.localStorage.setItem(POS_REQUEST_STORAGE_KEY, JSON.stringify(state.posRequest));
+}
+
+function syncPosRequestFormFields(posRequest = state.posRequest) {
+  if (!posRequest) {
+    return;
+  }
+
+  state.forms.posMode = {
+    ...(state.forms.posMode || {}),
+    terminalLabel: String(posRequest.terminalLabel || state.forms.posMode?.terminalLabel || ""),
+    terminalId: String(posRequest.terminalId || state.forms.posMode?.terminalId || ""),
+    amount: String(posRequest.normalizedAmount || state.forms.posMode?.amount || ""),
+    customerNote: String(posRequest.customerNote || ""),
+  };
+}
+
+async function ensurePosRequestQrDataUrl({ persist = true } = {}) {
+  if (!state.posRequest?.qrUrl || state.posRequest.qrDataUrl) {
+    return;
+  }
+
+  try {
+    const qrDataUrl = await QRCode.toDataURL(state.posRequest.qrUrl, {
+      width: 360,
+      margin: 1,
+      errorCorrectionLevel: "M",
+      color: {
+        dark: "#0f172a",
+        light: "#f8fafc",
+      },
+    });
+
+    state.posRequest = {
+      ...state.posRequest,
+      qrDataUrl,
+    };
+
+    if (persist) {
+      saveStoredPosRequest();
+    }
+  } catch (error) {
+    error;
+  }
+}
+
 function saveRecentActivity() {
   if (typeof window === "undefined") {
     return;
@@ -477,6 +655,20 @@ function formatPaymentHistoryAmount(amount, decimals = 6) {
   } catch (error) {
     return String(amount || "0");
   }
+}
+
+function shortIdentifier(value, head = 18, tail = 10) {
+  const normalized = String(value || "").trim();
+
+  if (!normalized) {
+    return "";
+  }
+
+  if (normalized.length <= head + tail + 3) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, head)}...${normalized.slice(-tail)}`;
 }
 
 function getPaymentHistoryDirection(status) {
@@ -612,6 +804,40 @@ function getPaymentRailStatusLabel(status = "") {
     default:
       return "Rail pending";
   }
+}
+
+function getPosCheckoutStatusLabel() {
+  const posStatus = state.posRequestStatus || createDefaultPosRequestStatus();
+  const reconciliationState = String(posStatus.reconciliation?.state || "").trim();
+
+  if (reconciliationState) {
+    return getReconciliationStateLabel(reconciliationState);
+  }
+
+  const paymentStatus = String(posStatus.payment?.status || "").trim();
+
+  if (paymentStatus) {
+    return getPaymentRailStatusLabel(paymentStatus);
+  }
+
+  if (posStatus.loading) {
+    return "Checking status";
+  }
+
+  if (posStatus.error) {
+    return "Status unavailable";
+  }
+
+  return state.posRequest ? "Waiting for payer" : "Waiting for checkout request";
+}
+
+function getPosCheckoutTxHash() {
+  return String(
+    state.posRequestStatus?.payment?.txHash ||
+      state.posRequestStatus?.reconciliation?.txHash ||
+      state.posRequestStatus?.reconciliation?.bridgeTxHash ||
+      "",
+  );
 }
 
 function getReconciliationAuthority() {
@@ -834,7 +1060,7 @@ function requireConnectedRuntime() {
 function requireAlignedProvider() {
   requireConnectedRuntime();
 
-  if (state.runtime.chainId !== state.selectedChainId) {
+  if (String(state.runtime.chainId || "") !== String(state.selectedChainId || "")) {
     throw new Error(`Switch wallet to ${getChainMetadata(state.selectedChainId).label} first.`);
   }
 
@@ -890,6 +1116,194 @@ function formatHumanAmountFromUnits(value, decimals = getSettlementContext().dec
   }
 }
 
+async function syncPosRequestStatus({ silent = true } = {}) {
+  const requestId = String(state.posRequest?.requestId || "").trim();
+
+  if (!requestId) {
+    state.posRequestStatus = createDefaultPosRequestStatus();
+    return;
+  }
+
+  if (!silent) {
+    state.posRequestStatus = {
+      ...(state.posRequestStatus || createDefaultPosRequestStatus()),
+      loading: true,
+      error: "",
+    };
+    render();
+  }
+
+  try {
+    const paymentUrl = new URL("/api/payments/list", window.location.origin);
+    paymentUrl.searchParams.set("requestId", requestId);
+    paymentUrl.searchParams.set("limit", "1");
+
+    const reconciliationUrl = new URL(
+      "/api/payments/reconciliation/records",
+      window.location.origin,
+    );
+    reconciliationUrl.searchParams.set("requestId", requestId);
+    reconciliationUrl.searchParams.set("limit", "1");
+
+    const [paymentResponse, reconciliationResponse] = await Promise.all([
+      fetch(paymentUrl.toString(), {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      }),
+      fetch(reconciliationUrl.toString(), {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      }),
+    ]);
+
+    const [paymentPayload, reconciliationPayload] = await Promise.all([
+      paymentResponse.json().catch(() => ({})),
+      reconciliationResponse.json().catch(() => ({})),
+    ]);
+
+    if (!paymentResponse.ok) {
+      throw new Error(
+        extractApiErrorMessage(
+          paymentPayload,
+          `POS checkout status request failed (${paymentResponse.status})`,
+        ),
+      );
+    }
+
+    if (!reconciliationResponse.ok) {
+      throw new Error(
+        extractApiErrorMessage(
+          reconciliationPayload,
+          `POS reconciliation request failed (${reconciliationResponse.status})`,
+        ),
+      );
+    }
+
+    const paymentRecord = Array.isArray(paymentPayload.records) && paymentPayload.records[0]
+      ? normalizePaymentHistoryRecord(paymentPayload.records[0])
+      : null;
+    const reconciliationRecord =
+      Array.isArray(reconciliationPayload.records) && reconciliationPayload.records[0]
+        ? normalizeReconciliationRecord(reconciliationPayload.records[0])
+        : null;
+    const previousTxHash = String(
+      state.posRequestStatus?.payment?.txHash || state.posRequestStatus?.reconciliation?.txHash || "",
+    );
+
+    state.posRequestStatus = {
+      loading: false,
+      error: "",
+      payment: paymentRecord,
+      reconciliation: reconciliationRecord,
+      syncedAt: Date.now(),
+    };
+
+    if (
+      paymentRecord?.status === "settled" &&
+      paymentRecord.txHash &&
+      paymentRecord.txHash !== previousTxHash
+    ) {
+      recordRecentActivity(
+        "POS checkout settled",
+        "POS Mode",
+        {
+          hash: paymentRecord.txHash,
+          identifiers: {
+            requestId: paymentRecord.requestId,
+            terminalId: paymentRecord.terminalId,
+          },
+        },
+        {
+          amountDisplay: paymentRecord.amount,
+          currency: paymentRecord.currency,
+          direction: "positive",
+          subtitle: paymentRecord.terminalId || state.posRequest?.terminalLabel || "QR checkout",
+          metaLabel: "SETTLED",
+        },
+      );
+    }
+  } catch (error) {
+    state.posRequestStatus = {
+      ...createDefaultPosRequestStatus(),
+      error: String(error?.message || "POS checkout status is unavailable."),
+      syncedAt: Date.now(),
+    };
+  } finally {
+    syncPosRequestStatusPolling();
+    if (!silent) {
+      render();
+    }
+  }
+}
+
+function hasTerminalPosCheckoutStatus() {
+  const paymentStatus = String(state.posRequestStatus?.payment?.status || "").trim().toLowerCase();
+  return paymentStatus === "settled" || paymentStatus === "failed";
+}
+
+function shouldPollPosRequestStatus() {
+  if (!state.posRequest?.requestId) {
+    return false;
+  }
+
+  if (state.activeView !== "private-quotes") {
+    return false;
+  }
+
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+    return false;
+  }
+
+  return !hasTerminalPosCheckoutStatus();
+}
+
+function stopPosRequestStatusPolling() {
+  if (posRequestStatusPollTimer !== null) {
+    window.clearInterval(posRequestStatusPollTimer);
+    posRequestStatusPollTimer = null;
+  }
+}
+
+async function runPosRequestStatusPoll() {
+  if (posRequestStatusPollInFlight || !state.posRequest?.requestId) {
+    return;
+  }
+
+  posRequestStatusPollInFlight = true;
+
+  try {
+    await syncPosRequestStatus({ silent: true });
+    render();
+  } finally {
+    posRequestStatusPollInFlight = false;
+  }
+}
+
+function syncPosRequestStatusPolling({ forceRefresh = false } = {}) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (!shouldPollPosRequestStatus()) {
+    stopPosRequestStatusPolling();
+    return;
+  }
+
+  if (posRequestStatusPollTimer === null) {
+    posRequestStatusPollTimer = window.setInterval(() => {
+      void runPosRequestStatusPoll();
+    }, POS_REQUEST_STATUS_POLL_INTERVAL_MS);
+  }
+
+  if (forceRefresh) {
+    void runPosRequestStatusPoll();
+  }
+}
+
 function formatTimestamp(timestamp) {
   const numeric = Number(timestamp || 0);
 
@@ -898,6 +1312,134 @@ function formatTimestamp(timestamp) {
   }
 
   return new Date(numeric * 1000).toLocaleString();
+}
+
+function normalizeTerminalIdentifier(value = "") {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+}
+
+function getResolvedPosTerminalLabel() {
+  return String(state.forms.posMode?.terminalLabel || "").trim() || "Front Counter";
+}
+
+function getResolvedPosTerminalId() {
+  const explicitTerminalId = normalizeTerminalIdentifier(state.forms.posMode?.terminalId || "");
+
+  if (explicitTerminalId) {
+    return explicitTerminalId;
+  }
+
+  const labelTerminalId = normalizeTerminalIdentifier(getResolvedPosTerminalLabel());
+  return labelTerminalId ? `terminal-${labelTerminalId}` : "terminal-front-counter";
+}
+
+function createMerchantPosSessionId(terminalId = "terminal") {
+  return `sess_${terminalId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createMerchantPosRequestId(terminalId = "terminal") {
+  return `req_pos_${terminalId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createMerchantPosDeviceFingerprintHash({
+  merchantAddress = "",
+  terminalId = "",
+  sessionId = "",
+} = {}) {
+  return hashText(`pos:${merchantAddress}:${terminalId}:${sessionId}`);
+}
+
+function appendPaymentEntry(url, entry = "") {
+  const nextUrl = new URL(url, window.location.origin);
+
+  if (entry) {
+    nextUrl.searchParams.set("entry", entry);
+  } else {
+    nextUrl.searchParams.delete("entry");
+  }
+
+  return nextUrl.toString();
+}
+
+function getMerchantPosContext() {
+  if (!state.runtime.connected || !state.runtime.account) {
+    throw new Error("Connect a wallet before generating a POS request.");
+  }
+
+  if (state.runtime.chainId !== state.selectedChainId) {
+    throw new Error(`Switch wallet to ${getChainMetadata(state.selectedChainId).label} first.`);
+  }
+
+  const settlement = getSettlementContext();
+  const merchantAddress = state.runtime.account;
+  const merchantId =
+    String(state.companySnapshot?.companyId || "").trim() ||
+    `merchant-${merchantAddress.slice(2, 8).toLowerCase()}`;
+  const terminalLabel = getResolvedPosTerminalLabel();
+  const terminalId = getResolvedPosTerminalId();
+  const customerNote = String(state.forms.posMode?.customerNote || "").trim();
+  const amountUnits = parseAmountToUnits(
+    String(state.forms.posMode?.amount || "").trim(),
+    settlement.decimals,
+  );
+
+  if (amountUnits <= 0n) {
+    throw new Error("Amount must be greater than zero.");
+  }
+
+  const normalizedAmount = formatHumanAmountFromUnits(amountUnits, settlement.decimals);
+
+  state.forms.posMode = {
+    ...(state.forms.posMode || {}),
+    terminalLabel,
+    terminalId,
+    amount: normalizedAmount,
+    customerNote,
+  };
+
+  const requestId = createMerchantPosRequestId(terminalId);
+  const sessionId = createMerchantPosSessionId(terminalId);
+  const deviceFingerprintHash = createMerchantPosDeviceFingerprintHash({
+    merchantAddress,
+    terminalId,
+    sessionId,
+  });
+  const payload = createShareablePaymentIntentPayload({
+    source: "pos",
+    title: customerNote || `${terminalLabel} checkout`,
+    requestId,
+    merchantId,
+    terminalId,
+    terminalLabel,
+    receiptId: "",
+    quoteId: "",
+    invoiceId: "",
+    merchantAddress,
+    amount: normalizedAmount,
+    currency: settlement.symbol,
+    sessionId,
+    deviceFingerprintHash,
+    customerNote,
+  });
+
+  return {
+    settlement,
+    merchantAddress,
+    merchantId,
+    requestId,
+    terminalId,
+    terminalLabel,
+    customerNote,
+    sessionId,
+    deviceFingerprintHash,
+    normalizedAmount,
+    payload,
+  };
 }
 
 function getInvoicePaymentRailPayload() {
@@ -1638,6 +2180,149 @@ async function handleCopyInvoicePaymentLink() {
   await navigator.clipboard.writeText(paymentLink);
   setNotice("Invoice payment link copied to clipboard.", "good");
   render();
+}
+
+async function generateMerchantPosRequest() {
+  const context = getMerchantPosContext();
+  const baseUrl = createShareablePaymentIntentUrl(
+    context.payload,
+    `${window.location.origin}/pay.html`,
+  );
+  const linkUrl = appendPaymentEntry(baseUrl, "direct");
+  const qrUrl = appendPaymentEntry(baseUrl, "qr");
+  const qrDataUrl = await QRCode.toDataURL(qrUrl, {
+    width: 360,
+    margin: 1,
+    errorCorrectionLevel: "M",
+    color: {
+      dark: "#0f172a",
+      light: "#f8fafc",
+    },
+  });
+
+  state.posRequest = {
+    ...context,
+    linkUrl,
+    qrUrl,
+    qrDataUrl,
+    createdAt: Date.now(),
+  };
+  state.posRequestStatus = createDefaultPosRequestStatus();
+  syncPosRequestFormFields();
+  saveStoredPosRequest();
+
+  recordRecentActivity(
+    "POS request generated",
+    "POS Mode",
+    {
+      hash: hashText(linkUrl),
+      identifiers: {
+        terminalId: context.terminalId,
+      },
+    },
+    {
+      amountDisplay: context.normalizedAmount,
+      currency: context.settlement.symbol,
+      direction: "neutral",
+      subtitle: context.terminalLabel,
+      metaLabel: "POS",
+    },
+  );
+}
+
+async function handleCreatePosRequest() {
+  state.busyAction = "create-pos-request";
+  setNotice("Generating a tablet-ready POS request for this terminal.", "warn");
+  render();
+
+  try {
+    await generateMerchantPosRequest();
+    await syncPosRequestStatus({ silent: true });
+    setNotice("POS request generated. QR checkout is live and waiting for the payer.", "good");
+  } finally {
+    state.busyAction = "";
+    render();
+  }
+}
+
+async function handleRefreshPosSession() {
+  state.busyCommand = "refresh-pos-session";
+  setNotice("Rotating the terminal session and refreshing the QR route.", "warn");
+  render();
+
+  try {
+    await generateMerchantPosRequest();
+    await syncPosRequestStatus({ silent: true });
+    setNotice("Terminal session rotated. Use the refreshed QR route for the next customer.", "good");
+  } finally {
+    state.busyCommand = "";
+    render();
+  }
+}
+
+async function handleCopyPosQr() {
+  const qrUrl = state.posRequest?.qrUrl;
+
+  if (!qrUrl) {
+    throw new Error("Generate a POS request first.");
+  }
+
+  await navigator.clipboard.writeText(qrUrl);
+  setNotice("QR route copied to clipboard.", "good");
+  render();
+}
+
+async function handleRefreshPosStatus() {
+  if (!state.posRequest?.requestId) {
+    throw new Error("Generate a POS request first.");
+  }
+
+  state.busyCommand = "refresh-pos-status";
+  setNotice("Checking the live rail status for this QR checkout request.", "warn");
+  render();
+
+  try {
+    await syncPosRequestStatus({ silent: true });
+
+    if (state.posRequestStatus.error) {
+      setNotice(state.posRequestStatus.error, "bad");
+      return;
+    }
+
+    const tone = state.posRequestStatus.payment ? "good" : "muted";
+    setNotice(`Checkout status refreshed. ${getPosCheckoutStatusLabel()}.`, tone);
+  } finally {
+    state.busyCommand = "";
+    render();
+  }
+}
+
+async function handleTogglePosDisplay() {
+  const posPanel = document.querySelector("[data-pos-panel]");
+
+  if (!posPanel) {
+    throw new Error("POS panel is not available.");
+  }
+
+  if (typeof posPanel.requestFullscreen !== "function") {
+    throw new Error("Fullscreen mode is not supported in this browser.");
+  }
+
+  state.busyCommand = "toggle-pos-display";
+  render();
+
+  try {
+    if (document.fullscreenElement === posPanel) {
+      await document.exitFullscreen();
+      setNotice("Tablet display mode closed. Dashboard view is active again.", "muted");
+    } else {
+      await posPanel.requestFullscreen();
+      setNotice("Tablet display mode is live. Hand the screen to the customer or cashier.", "good");
+    }
+  } finally {
+    state.busyCommand = "";
+    render();
+  }
 }
 
 function hidePrivateBalance() {
@@ -2589,6 +3274,7 @@ function renderForms() {
     ["[data-company-button]", "register-company", "Registering...", "Register Company"],
     ["[data-send-button]", "send-payment", "Encrypting...", "Encrypt and Send"],
     ["[data-create-invoice-button]", "create-invoice", "Encrypting...", "Create Invoice"],
+    ["[data-create-pos-button]", "create-pos-request", "Generating...", "Generate POS Request"],
     ["[data-create-private-quote-button]", "create-private-quote", "Creating...", "Create Private Quote"],
     ["[data-read-invoice-button]", "read-invoice", "Loading...", "Load Invoice"],
     ["[data-read-outstanding-button]", "read-outstanding", "Revealing...", "Reveal Outstanding"],
@@ -2675,6 +3361,7 @@ function renderPaymentIntentWidget() {
   const prefill = getPaymentIntentWidgetPrefill();
 
   const widgetOptions = {
+    source: prefill.source || "",
     permitHash: "",
     sessionId: "sess_hexapay_ui",
     deviceFingerprintHash: "dev_hexapay_hash",
@@ -2754,6 +3441,172 @@ function renderPaymentIntentWidget() {
   }
 
   container.__paymentIntentWidget?.update?.(widgetOptions);
+}
+
+function renderPosModeSummary() {
+  const posPanel = document.querySelector("[data-pos-panel]");
+  const summary = document.querySelector("[data-pos-summary]");
+  const helper = document.querySelector("[data-pos-helper]");
+  const resultCard = document.querySelector("[data-pos-result]");
+  const refreshButton = document.querySelector("[data-refresh-pos-session-button]");
+  const refreshStatusButton = document.querySelector("[data-refresh-pos-status-button]");
+  const fullscreenButton = document.querySelector("[data-pos-fullscreen-button]");
+  const qrImage = document.querySelector("[data-pos-qr-image]");
+  const customerAmount = document.querySelector("[data-pos-customer-amount]");
+  const customerTerminal = document.querySelector("[data-pos-customer-terminal]");
+  const qrLink = document.querySelector("[data-pos-qr-link]");
+  const openLink = document.querySelector("[data-pos-open-link]");
+  const requestId = document.querySelector("[data-pos-request-id]");
+  const checkoutStatus = document.querySelector("[data-pos-checkout-status]");
+  const lastTx = document.querySelector("[data-pos-last-tx]");
+  const sessionId = document.querySelector("[data-pos-session-id]");
+  const deviceFingerprint = document.querySelector("[data-pos-device-fingerprint]");
+  const customerNote = document.querySelector("[data-pos-customer-note]");
+
+  if (!summary || !helper || !resultCard || !refreshButton) {
+    return;
+  }
+
+  const moduleChain = getChainMetadata(state.selectedChainId).shortLabel;
+  const walletChain = state.runtime.connected
+    ? getChainMetadata(state.runtime.chainId).shortLabel
+    : "Wallet offline";
+  const posRequest = state.posRequest;
+  const posStatus = state.posRequestStatus || createDefaultPosRequestStatus();
+  const posDisplayActive = Boolean(posPanel && document.fullscreenElement === posPanel);
+  const walletAligned =
+    state.runtime.connected && String(state.runtime.chainId || "") === String(state.selectedChainId || "");
+  const paymentStatus = String(posStatus.payment?.status || "").trim().toLowerCase();
+  const checkoutLabel = getPosCheckoutStatusLabel();
+  const checkoutTxHash = getPosCheckoutTxHash();
+  const posControlsBusy = state.busyAction !== "" || state.busyCommand !== "";
+
+  if (!state.runtime.connected) {
+    helper.textContent = `Connect a wallet on ${moduleChain} to generate a POS checkout route.`;
+  } else if (!walletAligned) {
+    helper.textContent = `Wallet is on ${walletChain}. Switch to ${moduleChain} before generating a POS request.`;
+  } else if (!posRequest) {
+    helper.textContent = `POS mode is ready on ${moduleChain}. Generate a fresh QR request for the next customer.`;
+  } else if (posStatus.loading) {
+    helper.textContent = `Checking live checkout status for ${posRequest.terminalId}.`;
+  } else if (paymentStatus === "settled") {
+    helper.textContent = `Terminal ${posRequest.terminalId} is settled on ${moduleChain}. Rotate the session before the next customer.`;
+  } else if (paymentStatus === "executing" || paymentStatus === "signed" || paymentStatus === "challenge") {
+    helper.textContent = `Terminal ${posRequest.terminalId} is tracking a live checkout. Current status: ${checkoutLabel}.`;
+  } else if (paymentStatus === "failed") {
+    helper.textContent = `Terminal ${posRequest.terminalId} reported a failed checkout. Refresh the status or rotate the session.`;
+  } else if (posStatus.error) {
+    helper.textContent = `Status sync issue: ${posStatus.error}`;
+  } else if (posDisplayActive) {
+    helper.textContent = `Terminal ${posRequest.terminalId} is live on ${moduleChain}. Tablet display mode is active for cashier handoff.`;
+  } else {
+    helper.textContent = `Terminal ${posRequest.terminalId} is live on ${moduleChain}. Share the QR route with the customer.`;
+  }
+
+  summary.innerHTML = `
+    <div class="summary-row">
+      <span>Status</span>
+      <strong>${escapeHtml(posRequest ? "Request generated" : "Waiting for checkout request")}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Merchant</span>
+      <strong>${escapeHtml(state.runtime.connected ? `${shortAddress(state.runtime.account)} · ${walletChain}` : "Connect wallet")}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Terminal</span>
+      <strong>${escapeHtml(posRequest?.terminalId || getResolvedPosTerminalId())}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Request ID</span>
+      <strong>${escapeHtml(
+        posRequest?.requestId
+          ? shortIdentifier(posRequest.requestId, 18, 10)
+          : "Generate a request",
+      )}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Checkout</span>
+      <strong>${escapeHtml(checkoutLabel)}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Entry points</span>
+      <strong>QR</strong>
+    </div>
+    <div class="summary-row">
+      <span>Display</span>
+      <strong>${escapeHtml(posDisplayActive ? "Tablet fullscreen" : "Inline dashboard")}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Security</span>
+      <strong>${escapeHtml(posRequest ? "terminalId + sessionId + deviceFingerprintHash" : "Generated per checkout request")}</strong>
+    </div>
+  `;
+
+  refreshButton.disabled = posControlsBusy;
+  refreshButton.textContent =
+    state.busyCommand === "refresh-pos-session" ? "Rotating..." : "Rotate Session";
+  if (refreshStatusButton) {
+    refreshStatusButton.disabled =
+      !posRequest ||
+      posControlsBusy;
+    refreshStatusButton.textContent =
+      state.busyCommand === "refresh-pos-status" ? "Refreshing..." : "Refresh Status";
+  }
+  if (fullscreenButton) {
+    const fullscreenSupported = typeof posPanel?.requestFullscreen === "function";
+    fullscreenButton.disabled =
+      !fullscreenSupported ||
+      posControlsBusy;
+    fullscreenButton.textContent =
+      state.busyCommand === "toggle-pos-display"
+        ? (posDisplayActive ? "Closing..." : "Launching...")
+        : (posDisplayActive ? "Exit Tablet View" : "Open Tablet View");
+  }
+
+  resultCard.hidden = !posRequest;
+
+  if (!posRequest) {
+    return;
+  }
+
+  if (qrImage) {
+    qrImage.src = posRequest.qrDataUrl;
+  }
+  if (customerAmount) {
+    customerAmount.textContent = `${posRequest.normalizedAmount} ${posRequest.settlement.symbol}`;
+  }
+  if (customerTerminal) {
+    customerTerminal.textContent = `${posRequest.terminalLabel} · ${posRequest.terminalId}`;
+  }
+  if (qrLink) {
+    qrLink.href = posRequest.qrUrl;
+    qrLink.textContent = posRequest.qrUrl;
+  }
+  if (openLink) {
+    openLink.href = posRequest.qrUrl;
+  }
+  if (requestId) {
+    requestId.textContent = shortIdentifier(posRequest.requestId, 18, 10) || "Waiting";
+  }
+  if (checkoutStatus) {
+    checkoutStatus.textContent = checkoutLabel;
+  }
+  if (lastTx) {
+    lastTx.textContent = checkoutTxHash
+      ? shortIdentifier(checkoutTxHash, 18, 10)
+      : posStatus.loading
+        ? "Checking"
+        : "Waiting for settlement";
+  }
+  if (sessionId) {
+    sessionId.textContent = posRequest.sessionId;
+  }
+  if (deviceFingerprint) {
+    deviceFingerprint.textContent = posRequest.deviceFingerprintHash;
+  }
+  if (customerNote) {
+    customerNote.textContent = posRequest.customerNote || "Walk-up checkout";
+  }
 }
 
 function renderPrivateQuoteSummary() {
@@ -3855,6 +4708,7 @@ function render() {
   renderForms();
   renderCompanySummary();
   renderPaymentIntentWidget();
+  renderPosModeSummary();
   renderPrivateQuoteSummary();
   renderInvoiceSummary();
   renderPolicySummary();
@@ -3914,6 +4768,26 @@ async function handleCommand(command) {
       return;
     }
 
+    if (command === "refresh-pos-session") {
+      await handleRefreshPosSession();
+      return;
+    }
+
+    if (command === "copy-pos-qr") {
+      await handleCopyPosQr();
+      return;
+    }
+
+    if (command === "refresh-pos-status") {
+      await handleRefreshPosStatus();
+      return;
+    }
+
+    if (command === "toggle-pos-display") {
+      await handleTogglePosDisplay();
+      return;
+    }
+
     if (command === "copy-private-quote-link") {
       await handleCopyPrivateQuoteLink();
       return;
@@ -3954,6 +4828,11 @@ async function handleAction(action) {
 
     if (action === "create-invoice") {
       await handleCreateInvoice();
+      return;
+    }
+
+    if (action === "create-pos-request") {
+      await handleCreatePosRequest();
       return;
     }
 
@@ -4145,6 +5024,16 @@ function bindEvents() {
     render();
   });
 
+  document.addEventListener("fullscreenchange", () => {
+    render();
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    syncPosRequestStatusPolling({
+      forceRefresh: document.visibilityState === "visible",
+    });
+  });
+
   window.addEventListener("storage", async (event) => {
     if (
       event.key === WALLET_SESSION_STORAGE_KEY ||
@@ -4164,6 +5053,22 @@ function bindEvents() {
       return;
     }
 
+    if (event.key === POS_REQUEST_STORAGE_KEY) {
+      state.posRequest = loadStoredPosRequest();
+      state.posRequestStatus = createDefaultPosRequestStatus();
+
+      if (state.posRequest) {
+        syncPosRequestFormFields();
+        await ensurePosRequestQrDataUrl();
+        await syncPosRequestStatus({ silent: true });
+      } else {
+        stopPosRequestStatusPolling();
+      }
+
+      render();
+      return;
+    }
+
     if (!receiptStoreChangeKey || event.key !== receiptStoreChangeKey) {
       return;
     }
@@ -4175,11 +5080,21 @@ function bindEvents() {
 
 async function bootstrap() {
   state.recentActivity = loadRecentActivity();
+  state.posRequest = loadStoredPosRequest();
+  state.posRequestStatus = createDefaultPosRequestStatus();
+
+  if (state.posRequest) {
+    syncPosRequestFormFields();
+  }
+
   render();
   bindEvents();
   await bootstrapManifest();
   await syncPrivateQuoteConfig();
   await refreshAppState({ silent: true });
+  await ensurePosRequestQrDataUrl();
+  await syncPosRequestStatus({ silent: true });
+  syncPosRequestStatusPolling();
   render();
 }
 

@@ -12,7 +12,7 @@ This roadmap turns HexaPay from a working private-finance prototype into a real 
 - live USDC settlement
 - persistent payment ledger
 - product-grade merchant and payer flows
-- real-world merchant entry points such as NFC, QR, and POS
+- real-world merchant entry points such as QR and POS
 - protocol and ecosystem primitives for external integration
 
 ## Roadmap Rules
@@ -244,7 +244,7 @@ Tasks:
 - user can track payment history
 - UI feels production-like
 
-## Milestone: Wave 4 — Real-World Payments (NFC & POS)
+## Milestone: Wave 4 — Real-World Payments (QR & POS)
 
 ### Goal
 
@@ -252,20 +252,9 @@ Enable real merchant usage.
 
 ### Issue Breakdown
 
-#### NFC
-
-1. NFC -> Intent Binding
-
-Title:
-- `feat(nfc): bind NFC tap to payment intent trigger`
-
-Tasks:
-- load intent from tap
-- trigger UI flow from tap entry
-
 #### POS Mode
 
-2. Merchant POS Interface
+1. Merchant POS Interface
 
 Title:
 - `feat(pos): build merchant payment interface (tablet mode)`
@@ -277,7 +266,7 @@ Tasks:
 
 #### Payment Entry
 
-3. QR Payment Flow
+2. QR Payment Flow
 
 Title:
 - `feat(payment): implement QR-based payment entry`
@@ -288,7 +277,7 @@ Tasks:
 
 #### Device Layer
 
-4. Device Identity Enforcement
+3. Device Identity Enforcement
 
 Title:
 - `feat(security): enforce terminalId and device binding`
@@ -300,7 +289,6 @@ Tasks:
 ### Definition of Done
 
 - merchant can accept payment
-- user can pay via NFC
 - user can pay via QR
 - POS mode is usable in merchant flow
 
@@ -374,7 +362,7 @@ Title:
 - Treat payment lifecycle state as a first-class product primitive, not only a backend detail.
 - Ledger and history should be designed once with persistence expansion in mind.
 - Merchant-facing UX should not depend on dev-only mock controls once Wave 3 begins.
-- Device identity, terminal binding, and QR/NFC entry should reuse the same intent model introduced in Wave 2.
+- Device identity, terminal binding, and QR entry should reuse the same intent model introduced in Wave 2.
 - External USDC rail settlement and confidential workflow settlement are different ledgers today; any future bridge between them must be explicit, replay-safe, and non-duplicative.
 
 ## Recommended Folder Alignment

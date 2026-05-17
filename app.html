@@ -181,6 +181,12 @@
               <span class="action-card-copy">Open the live USDC execution flow and send a new payment from this dashboard.</span>
               <span class="action-card-meta">Live settlement</span>
             </button>
+            <button class="action-card" type="button" data-view-target="private-quotes">
+              <span class="action-card-kicker">POS Mode</span>
+              <strong>Accept Payment</strong>
+              <span class="action-card-copy">Generate a QR payer route for a live Arbitrum Sepolia checkout request.</span>
+              <span class="action-card-meta">Merchant entry</span>
+            </button>
             <button class="action-card" type="button" data-view-target="invoices">
               <span class="action-card-kicker">Workflow</span>
               <strong>Create Invoice</strong>
@@ -561,6 +567,124 @@
         </section>
 
         <section class="view-panel" data-view-panel="private-quotes" hidden>
+          <section class="operation-card panel-shell" id="pos-mode" data-pos-panel>
+            <div class="operation-head">
+              <div>
+                <span class="operation-kicker">POS Mode</span>
+                <h2>Accept payment with QR</h2>
+              </div>
+              <span class="operation-pill">Merchant</span>
+            </div>
+            <p class="operation-copy">
+              Build a terminal-bound payment request for Arbitrum Sepolia testnet. Customers can scan the QR code to open the payer route.
+            </p>
+            <div class="form-grid">
+              <label class="field">
+                <span>Terminal label</span>
+                <input type="text" placeholder="Front Counter" data-field="posMode.terminalLabel">
+              </label>
+              <label class="field">
+                <span>Terminal ID</span>
+                <input type="text" placeholder="terminal-front-01" data-field="posMode.terminalId">
+              </label>
+              <label class="field">
+                <span>Amount</span>
+                <input type="text" placeholder="12.50" inputmode="decimal" data-field="posMode.amount">
+              </label>
+              <label class="field">
+                <span>Customer note</span>
+                <input type="text" placeholder="Walk-up checkout" data-field="posMode.customerNote">
+              </label>
+            </div>
+            <div class="operation-actions">
+              <button class="toolbar-btn primary" type="button" data-action="create-pos-request" data-create-pos-button>
+                Generate POS Request
+              </button>
+              <button class="toolbar-btn" type="button" data-command="refresh-pos-session" data-refresh-pos-session-button>
+                Rotate Session
+              </button>
+              <button class="toolbar-btn" type="button" data-command="toggle-pos-display" data-pos-fullscreen-button>
+                Open Tablet View
+              </button>
+            </div>
+            <div class="helper-line" data-pos-helper>
+              Connect a wallet on Arbitrum Sepolia to generate a terminal-bound checkout request.
+            </div>
+            <div class="summary-list" data-pos-summary>
+              <div class="summary-row">
+                <span>Status</span>
+                <strong>Waiting for merchant request</strong>
+              </div>
+              <div class="summary-row">
+                <span>Entry points</span>
+                <strong>QR</strong>
+              </div>
+            </div>
+            <div class="pos-result" data-pos-result hidden>
+              <div class="pos-result-grid">
+                <div class="pos-customer-preview">
+                  <div class="pos-customer-kicker">Customer Preview</div>
+                  <div class="pos-customer-amount" data-pos-customer-amount>0 USDC</div>
+                  <div class="pos-customer-terminal" data-pos-customer-terminal>Front Counter</div>
+                  <div class="pos-qr-shell">
+                    <img data-pos-qr-image alt="HexaPay POS QR code">
+                  </div>
+                  <div class="pos-customer-copy">
+                    Scan this code to open the payer route on testnet.
+                  </div>
+                </div>
+                <div class="pos-entry-stack">
+                  <div class="pq-field">
+                    <div class="pq-label">QR Route</div>
+                    <div class="pq-value mono">
+                      <a data-pos-qr-link href="/pay.html" target="_blank" rel="noreferrer">Open QR route</a>
+                    </div>
+                  </div>
+                  <div class="pq-field">
+                    <div class="pq-label">Request ID</div>
+                    <div class="pq-value mono" data-pos-request-id>Waiting</div>
+                  </div>
+                  <div class="pq-field">
+                    <div class="pq-label">Checkout Status</div>
+                    <div class="pq-value" data-pos-checkout-status>Waiting for payer</div>
+                  </div>
+                  <div class="pq-field">
+                    <div class="pq-label">Last Rail TX</div>
+                    <div class="pq-value mono" data-pos-last-tx>Waiting for settlement</div>
+                  </div>
+                  <div class="pq-field">
+                    <div class="pq-label">Session Binding</div>
+                    <div class="pq-value mono" data-pos-session-id>Waiting</div>
+                  </div>
+                  <div class="pq-field">
+                    <div class="pq-label">Device Binding</div>
+                    <div class="pq-value mono" data-pos-device-fingerprint>Waiting</div>
+                  </div>
+                  <div class="pq-field">
+                    <div class="pq-label">Customer Note</div>
+                    <div class="pq-value" data-pos-customer-note>Waiting</div>
+                  </div>
+                  <div class="pos-chip-row">
+                    <span class="pos-chip">QR Ready</span>
+                    <span class="pos-chip">Terminal Locked</span>
+                    <span class="pos-chip">Session Locked</span>
+                  </div>
+                  <div class="pq-actions">
+                    <button class="toolbar-btn" type="button" data-command="copy-pos-qr">
+                      Copy QR Route
+                    </button>
+                    <button class="toolbar-btn" type="button" data-command="refresh-pos-status" data-refresh-pos-status-button>
+                      Refresh Status
+                    </button>
+                    <a class="toolbar-btn primary" data-pos-open-link href="/pay.html" target="_blank" rel="noreferrer">
+                      Open Payer Preview
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <section class="operation-card panel-shell" id="private-quotes">
             <div class="operation-head">
               <div>

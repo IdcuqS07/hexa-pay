@@ -52,6 +52,7 @@ const state = {
   },
   fhenix: createDefaultFhenixState(),
   quoteId: new URL(window.location.href).searchParams.get("id") || "",
+  intentEntry: new URL(window.location.href).searchParams.get("entry") || "",
   intentRequest: getShareablePaymentIntentPayloadFromUrl(),
   intentExecution: null,
   reconciliation: {
@@ -182,13 +183,56 @@ function getPayRouteTargetChainId() {
   return String(state.config?.chainId || DEFAULT_CHAIN_ID);
 }
 
+function getSharedIntentSourceKey() {
+  return String(state.intentRequest?.source || "").trim().toLowerCase();
+}
+
+function getSharedIntentEntryKey() {
+  const explicitEntry = String(state.intentEntry || "").trim().toLowerCase();
+
+  if (explicitEntry) {
+    return explicitEntry;
+  }
+
+  if (getSharedIntentSourceKey() === "invoice") {
+    return "invoice";
+  }
+
+  return "direct";
+}
+
+function getSharedIntentEntryLabel() {
+  switch (getSharedIntentEntryKey()) {
+    case "qr":
+      return "QR Scan";
+    case "invoice":
+      return "Invoice Link";
+    default:
+      return "Direct Link";
+  }
+}
+
+function getSharedIntentKickerLabel() {
+  const source = getSharedIntentSourceKey();
+
+  if (source === "pos") {
+    return "Merchant POS";
+  }
+
+  if (source === "invoice") {
+    return "Invoice Payment";
+  }
+
+  return "Shared Payment Route";
+}
+
 function getSharedIntentNotice() {
   if (state.intentExecution?.txHash) {
     return "Shared payment request settled successfully.";
   }
 
   return state.runtime.connected
-    ? "Shared payment request ready. Review the payment rail below."
+    ? `${getSharedIntentEntryLabel()} request ready. Review the payment rail below.`
     : "Connect a wallet to settle the shared payment request.";
 }
 
@@ -375,9 +419,11 @@ function renderSharedIntentWidget() {
 
   const request = state.intentRequest;
   const widgetOptions = {
+    requestId: request.requestId || "",
+    source: request.source || "",
     permitHash: "",
-    sessionId: "sess_hexapay_pay_route",
-    deviceFingerprintHash: "dev_hexapay_pay_route",
+    sessionId: request.sessionId || "sess_hexapay_pay_route",
+    deviceFingerprintHash: request.deviceFingerprintHash || "dev_hexapay_pay_route",
     merchantId: request.merchantId || "",
     terminalId: request.terminalId || "",
     receiptId: request.receiptId || "",
@@ -388,8 +434,13 @@ function renderSharedIntentWidget() {
     currency: request.currency || "USDC",
     clearOnSuccess: false,
     prefillRevision: [
+      request.source,
+      request.requestId,
       request.invoiceId,
       request.merchantId,
+      request.terminalId,
+      request.sessionId,
+      request.deviceFingerprintHash,
       request.amount,
       request.merchantAddress,
     ].join(":"),
@@ -494,19 +545,25 @@ function render() {
   refreshButton.disabled = state.busyCommand !== "";
 
   if (isIntentRoute) {
+    const entryLabel = getSharedIntentEntryLabel();
+    const sourceKey = getSharedIntentSourceKey();
+    const sharedTitle = intentRequest.title || "Pay shared request";
+
     document.title = "HexaPay - Pay Shared Request";
     if (kicker) {
-      kicker.textContent = "Shared Payment Intent";
+      kicker.textContent = getSharedIntentKickerLabel();
     }
     if (heading) {
-      heading.textContent = "Pay shared request";
+      heading.textContent = sharedTitle;
     }
     if (panelPill) {
       panelPill.textContent = "Live rail";
     }
     if (copy) {
       copy.textContent =
-        "Open the shared request, connect the payer wallet, and settle USDC through the live HexaPay payment rail.";
+        sourceKey === "pos"
+          ? `Open the ${entryLabel.toLowerCase()} route, connect the payer wallet, and settle USDC through the live HexaPay payment rail on Arbitrum Sepolia testnet.`
+          : "Open the shared request, connect the payer wallet, and settle USDC through the live HexaPay payment rail.";
     }
 
     chainPill.textContent = "Arbitrum Sepolia";
@@ -514,15 +571,29 @@ function render() {
     statusPill.textContent = getSharedIntentStatusLabel();
 
     if (backLink) {
-      backLink.href = `${window.location.origin}/app.html#dashboard`;
-      backLink.textContent = "Back to Dashboard";
+      backLink.href =
+        sourceKey === "pos"
+          ? `${window.location.origin}/app.html#private-quotes`
+          : sourceKey === "invoice"
+            ? `${window.location.origin}/app.html#invoices`
+            : `${window.location.origin}/app.html#dashboard`;
+      backLink.textContent =
+        sourceKey === "pos"
+          ? "Back to POS Mode"
+          : sourceKey === "invoice"
+            ? "Back to Invoices"
+            : "Back to Dashboard";
     }
 
-    route.textContent = "Route: /pay.html?intent=...";
+    route.textContent = `Route: /pay.html?intent=... (${entryLabel})`;
     summary.innerHTML = `
       <div class="summary-row">
         <span>Status</span>
         <strong>${getSharedIntentStatusLabel()}</strong>
+      </div>
+      <div class="summary-row">
+        <span>Entry</span>
+        <strong>${entryLabel}</strong>
       </div>
       <div class="summary-row">
         <span>Merchant</span>
@@ -566,12 +637,24 @@ function render() {
         : "Executor Chain -> Payment Reconciliation Store -> Workflow Contract";
       intentSummary.innerHTML = `
         <div class="summary-row">
+          <span>Source</span>
+          <strong>${escapeHtml(getSharedIntentKickerLabel())}</strong>
+        </div>
+        <div class="summary-row">
           <span>Merchant ID</span>
-          <strong>${intentRequest.merchantId || "hexapay-merchant"}</strong>
+          <strong>${escapeHtml(intentRequest.merchantId || "hexapay-merchant")}</strong>
         </div>
         <div class="summary-row">
           <span>Terminal</span>
-          <strong>${intentRequest.terminalId || "dashboard"}</strong>
+          <strong>${escapeHtml(intentRequest.terminalLabel || intentRequest.terminalId || "dashboard")}</strong>
+        </div>
+        <div class="summary-row">
+          <span>Session lock</span>
+          <strong>${escapeHtml(intentRequest.sessionId || "Route default")}</strong>
+        </div>
+        <div class="summary-row">
+          <span>Device lock</span>
+          <strong>${escapeHtml(intentRequest.deviceFingerprintHash || "Route default")}</strong>
         </div>
         <div class="summary-row">
           <span>Invoice</span>

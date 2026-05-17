@@ -1,4 +1,4 @@
-import { BrowserProvider } from "ethers";
+import { BrowserProvider, parseUnits } from "ethers";
 
 const DEFAULT_HEXAPAY_EXECUTOR_CONTRACT =
   "0x7AD0bB5220E664A1057d101069c0309f9302c075";
@@ -18,6 +18,7 @@ const types = {
     { name: "requestId", type: "string" },
     { name: "receiptId", type: "string" },
     { name: "quoteId", type: "string" },
+    { name: "source", type: "string" },
     { name: "merchantId", type: "string" },
     { name: "terminalId", type: "string" },
     { name: "payer", type: "address" },
@@ -39,6 +40,7 @@ export interface PaymentIntent {
   requestId: string;
   receiptId: string;
   quoteId: string;
+  source: string;
   merchantId: string;
   terminalId: string;
   payer: string;
@@ -72,6 +74,7 @@ export async function createPaymentChallenge(params: {
   requestId: string;
   receiptId: string;
   quoteId?: string;
+  source?: string;
   merchantId: string;
   terminalId: string;
   amount: string;
@@ -84,7 +87,10 @@ export async function createPaymentChallenge(params: {
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(params),
+    body: JSON.stringify({
+      ...params,
+      amount: String(parseUnits(String(params.amount || "0"), 6)),
+    }),
   });
 
   if (!response.ok) {

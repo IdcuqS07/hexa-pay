@@ -631,6 +631,7 @@ function createReceiptApiMiddleware(options = {}) {
             receiptId: body.receiptId,
             invoiceId: body.invoiceId,
             quoteId: body.quoteId,
+            source: body.source,
             merchantId: body.merchantId,
             terminalId: body.terminalId,
             amount: body.amount,
@@ -664,6 +665,7 @@ function createReceiptApiMiddleware(options = {}) {
             merchant: url.searchParams.get("merchant") || "",
             payer: url.searchParams.get("payer") || "",
             status: url.searchParams.get("status") || "",
+            requestId: url.searchParams.get("requestId") || "",
             invoiceId: url.searchParams.get("invoiceId") || "",
             limit: url.searchParams.get("limit") || "",
           });
