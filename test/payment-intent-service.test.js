@@ -254,4 +254,99 @@ describe("payment intent service POS validation", function () {
     expect(filtered.records[0].requestId).to.equal(firstIntent.requestId);
     expect(filtered.records[0].status).to.equal("settled");
   });
+
+  it("verifies a signed intent and reports settled ledger status", async function () {
+    const paymentLedger = createPaymentLedgerAdapter({ mode: "memory" });
+    const service = createPaymentIntentService({
+      chainId: 421614,
+      verifyingContract: "0xD3cBE1F9A84E96DF340bef7b9D2B7C466Eb29d55",
+      challengeRegistry: createChallengeRegistry(),
+      paymentLedger,
+      executor: createExecutor(),
+    });
+
+    const challenge = await service.createChallenge(createPosChallengeInput());
+    const intent = createIntentFromChallenge(challenge);
+    const signature = await signIntent(service, intent);
+
+    await service.executeSignedIntent({
+      intent,
+      signature,
+    });
+
+    const verification = await service.verifyPaymentIntent({
+      intent,
+      signature,
+    });
+
+    expect(verification.ok).to.equal(true);
+    expect(verification.signature.valid).to.equal(true);
+    expect(verification.signature.code).to.equal("ok");
+    expect(verification.signature.signer).to.equal(payerWallet.address);
+    expect(verification.ledger.found).to.equal(true);
+    expect(verification.ledger.status).to.equal("settled");
+    expect(verification.challenge.matches).to.equal(true);
+    expect(verification.intentHash).to.match(/^0x[0-9a-f]{64}$/);
+  });
+
+  it("can verify execution status by request id without resubmitting the intent", async function () {
+    const paymentLedger = createPaymentLedgerAdapter({ mode: "memory" });
+    const service = createPaymentIntentService({
+      chainId: 421614,
+      verifyingContract: "0xD3cBE1F9A84E96DF340bef7b9D2B7C466Eb29d55",
+      challengeRegistry: createChallengeRegistry(),
+      paymentLedger,
+      executor: createExecutor(),
+    });
+
+    const challenge = await service.createChallenge(createPosChallengeInput());
+    const intent = createIntentFromChallenge(challenge);
+    const signature = await signIntent(service, intent);
+
+    await service.executeSignedIntent({
+      intent,
+      signature,
+    });
+
+    const verification = await service.verifyPaymentIntent({
+      requestId: intent.requestId,
+    });
+
+    expect(verification.ok).to.equal(true);
+    expect(verification.signature.valid).to.equal(null);
+    expect(verification.signature.code).to.equal("missing_signature");
+    expect(verification.ledger.found).to.equal(true);
+    expect(verification.ledger.status).to.equal("settled");
+    expect(verification.requestIdHash).to.match(/^0x[0-9a-f]{64}$/);
+  });
+
+  it("reports invalid signatures without executing the payment", async function () {
+    const paymentLedger = createPaymentLedgerAdapter({ mode: "memory" });
+    const service = createPaymentIntentService({
+      chainId: 421614,
+      verifyingContract: "0xD3cBE1F9A84E96DF340bef7b9D2B7C466Eb29d55",
+      challengeRegistry: createChallengeRegistry(),
+      paymentLedger,
+      executor: createExecutor(),
+    });
+
+    const challenge = await service.createChallenge(createPosChallengeInput());
+    const intent = createIntentFromChallenge(challenge);
+    const signature = await signIntent(service, intent);
+    const tamperedIntent = {
+      ...intent,
+      amount: "1",
+    };
+
+    const verification = await service.verifyPaymentIntent({
+      intent: tamperedIntent,
+      signature,
+    });
+
+    expect(verification.ok).to.equal(true);
+    expect(verification.signature.valid).to.equal(false);
+    expect(verification.signature.code).to.equal("signer_mismatch");
+    expect(verification.ledger.found).to.equal(true);
+    expect(verification.ledger.status).to.equal("challenge");
+  });
 });

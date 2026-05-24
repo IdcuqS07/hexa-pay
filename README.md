@@ -7,6 +7,7 @@ The current repository includes:
 - a public product homepage
 - a focused app surface for treasury, company, invoices, and masked activity
 - a deeper workspace for contract-level operations and diagnostics
+- a Wave 5 developer surface with a reusable JS SDK, public payment API, and protocol docs
 - a Solidity contract suite for confidential balances, invoices, escrow, compliance, and analytics
 
 ## Product Features
@@ -33,6 +34,15 @@ HexaPay now treats this as the default settlement rail for `arb-sepolia` deploys
 - `app.html`: product-facing app for day-to-day private finance flows
 - `hexapay.html`: deeper operations workspace and contract console
 - `payment-intent.html`: focused payment rail demo surface for Arbitrum Sepolia
+- `sdk/hexapay-sdk.cjs` and `sdk/hexapay-sdk.mjs`: reusable Wave 5 developer SDK
+
+## Wave 5 Developer Surface
+
+- JS SDK: `sdk/hexapay-sdk.cjs` and `sdk/hexapay-sdk.mjs`
+- Public API: `POST /api/payments/challenges`, `POST /api/payments/verify`, `POST /api/payments/execute`
+- Protocol spec: [docs/specs/SPEC_HEXAPAY_PAYMENT_INTENT.md](./docs/specs/SPEC_HEXAPAY_PAYMENT_INTENT.md)
+- Merchant guide: [docs/guides/MERCHANT_INTEGRATION.md](./docs/guides/MERCHANT_INTEGRATION.md)
+- Quick start: [docs/guides/PAYMENT_INTENT_QUICKSTART.md](./docs/guides/PAYMENT_INTENT_QUICKSTART.md)
 
 ## Live Contract Addresses
 
@@ -77,6 +87,7 @@ Fhenix Buildathon/
 ├── docs/                   # Roadmaps, status notes, and private-quote documentation
 ├── contracts/              # HexaPay core, workflow, escrow, compliance, analytics, vault, factory
 ├── scripts/                # Deployment, wallet setup, wrap bootstrap, and interaction helpers
+├── sdk/                    # Wave 5 developer SDK for create/sign/verify/execute flows
 ├── src/                    # App, workspace, client runtime, and shared styling
 ├── test/                   # Hardhat test suite for core and module behaviors
 ├── app.html                # HexaPay App entry

@@ -2,6 +2,18 @@
   "name": "hexapay-fhenix",
   "private": true,
   "version": "1.0.0",
+  "main": "./sdk/hexapay-sdk.cjs",
+  "module": "./sdk/hexapay-sdk.mjs",
+  "exports": {
+    ".": {
+      "require": "./sdk/hexapay-sdk.cjs",
+      "import": "./sdk/hexapay-sdk.mjs"
+    },
+    "./sdk": {
+      "require": "./sdk/hexapay-sdk.cjs",
+      "import": "./sdk/hexapay-sdk.mjs"
+    }
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",

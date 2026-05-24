@@ -13,6 +13,7 @@ This guide matches the live Arbitrum Sepolia payment rail that is currently veri
 - Browser UI at `app.html` and `payment-intent.html` uses the wallet currently connected in MetaMask or Rabby.
 - `TEST_PAYER_PRIVATE_KEY` is only used by the CLI runner `npm run test:payment-flow`.
 - EIP-712 signatures must use the `domain` returned by `POST /api/payments/challenges`.
+- Wave 5 SDK entrypoints live at `sdk/hexapay-sdk.cjs` and `sdk/hexapay-sdk.mjs`.
 
 ## Prerequisites
 
@@ -207,6 +208,35 @@ Success response:
   "requestIdHash": "0x...",
   "txHash": "0x...",
   "blockNumber": 12345
+}
+```
+
+### 4. Verify
+
+Use the verification endpoint either before execution with a full signed intent, or after execution with only the `requestId`.
+
+```bash
+curl -X POST http://localhost:3000/api/payments/verify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requestId": "req-001"
+  }'
+```
+
+Example response:
+
+```json
+{
+  "ok": true,
+  "status": "verified",
+  "requestId": "req-001",
+  "requestIdHash": "0x...",
+  "ledger": {
+    "found": true,
+    "status": "settled",
+    "txHash": "0x...",
+    "blockNumber": 12345
+  }
 }
 ```
 

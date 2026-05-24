@@ -46,6 +46,20 @@ function validateRealWorldIntentContext(input = {}, { phase = "intent" } = {}) {
   return source;
 }
 
+function validateIntentPayload(intent = {}, { phase = "intent" } = {}) {
+  validateRealWorldIntentContext(intent, { phase });
+  requiredString(intent?.challengeId, `${phase}.challengeId`);
+  requiredString(intent?.requestId, `${phase}.requestId`);
+  requiredString(intent?.merchantId, `${phase}.merchantId`);
+  requiredString(intent?.terminalId, `${phase}.terminalId`);
+  requiredString(intent?.currency, `${phase}.currency`);
+  requiredString(intent?.payer, `${phase}.payer`);
+  requiredString(intent?.merchant, `${phase}.merchant`);
+  requiredString(intent?.token, `${phase}.token`);
+  requiredString(intent?.amount, `${phase}.amount`);
+  return intent;
+}
+
 function normalizeExecutionKey(intent) {
   return `${intent.merchantId}:${intent.terminalId}:${intent.requestId}`;
 }
@@ -247,16 +261,7 @@ function createPaymentIntentService(options = {}) {
     const binding = assertInvoiceIntentBinding({
       receiptId: intent?.receiptId,
     });
-    validateRealWorldIntentContext(intent, { phase: "intent" });
-    requiredString(intent?.challengeId, "intent.challengeId");
-    requiredString(intent?.requestId, "intent.requestId");
-    requiredString(intent?.merchantId, "intent.merchantId");
-    requiredString(intent?.terminalId, "intent.terminalId");
-    requiredString(intent?.currency, "intent.currency");
-    requiredString(intent?.payer, "intent.payer");
-    requiredString(intent?.merchant, "intent.merchant");
-    requiredString(intent?.token, "intent.token");
-    requiredString(intent?.amount, "intent.amount");
+    validateIntentPayload(intent, { phase: "intent" });
 
     const now = nowMs();
 
@@ -462,6 +467,108 @@ function createPaymentIntentService(options = {}) {
     };
   }
 
+  async function verifyPaymentIntent({
+    intent = null,
+    signature = "",
+    expectedPayer = "",
+    requestId = "",
+  } = {}) {
+    const now = nowMs();
+    const requestedId = requiredString(
+      requestId || intent?.requestId,
+      "requestId or intent.requestId",
+    );
+    const requestIdHash = hashRequestId(requestedId);
+    const ledgerRecord = paymentLedger?.getByRequestId
+      ? await Promise.resolve(paymentLedger.getByRequestId(requestedId))
+      : null;
+    const verification = {
+      ok: true,
+      status: "verified",
+      requestId: requestedId,
+      requestIdHash,
+      domain,
+      signature: {
+        provided: Boolean(signature),
+        valid: null,
+        code: signature ? "unverified" : "missing_signature",
+        signer: "",
+        expectedPayer: "",
+      },
+      challenge: {
+        tracked: Boolean(ledgerRecord),
+        matches: null,
+        details: null,
+      },
+      ledger: {
+        found: Boolean(ledgerRecord),
+        status: ledgerRecord?.status || "not_found",
+        txHash: ledgerRecord?.txHash || "",
+        blockNumber: Number(ledgerRecord?.blockNumber || 0),
+        record: ledgerRecord || null,
+      },
+      lifecycle: {
+        nowMs: now,
+        issuedAtMs: intent ? Number(intent.issuedAtMs || 0) : 0,
+        expiresAtMs: intent ? Number(intent.expiresAtMs || 0) : 0,
+        expired:
+          intent && Number(intent.expiresAtMs || 0) > 0
+            ? Number(intent.expiresAtMs || 0) <= now
+            : null,
+        duplicateExecution:
+          Boolean(ledgerRecord) && isDuplicateLedgerStatus(ledgerRecord?.status),
+      },
+    };
+
+    if (!intent) {
+      return verification;
+    }
+
+    let resolvedExpectedPayer = "";
+    try {
+      validateIntentPayload(intent, { phase: "intent" });
+      resolvedExpectedPayer = expectedPayer || intent.payer;
+      verification.signature.expectedPayer = resolvedExpectedPayer
+        ? ethers.getAddress(resolvedExpectedPayer)
+        : "";
+    } catch (error) {
+      verification.signature.valid = false;
+      verification.signature.code = error.code || "invalid_intent";
+      verification.error = {
+        message: error.message || "Intent validation failed",
+      };
+      return verification;
+    }
+
+    const signatureResult = await verifyIntentSignature({
+      domain,
+      intent,
+      signature,
+      expectedPayer: resolvedExpectedPayer,
+    });
+
+    verification.signature.valid = Boolean(signatureResult.ok);
+    verification.signature.code = signatureResult.ok
+      ? "ok"
+      : signatureResult.code || "invalid_signature";
+    verification.signature.signer = signatureResult.signer || "";
+    verification.intentHash = signatureResult.intentHash || "";
+
+    if (ledgerRecord) {
+      try {
+        validateIntentAgainstChallengeRecord(intent, ledgerRecord);
+        verification.challenge.matches = true;
+      } catch (error) {
+        verification.challenge.matches = false;
+        verification.challenge.details = error.details || {
+          message: error.message || "Challenge mismatch",
+        };
+      }
+    }
+
+    return verification;
+  }
+
   async function listPayments(filters = {}) {
     if (paymentLedger?.list) {
       return await Promise.resolve(paymentLedger.list(filters));
@@ -634,6 +741,7 @@ function createPaymentIntentService(options = {}) {
     domain,
     createChallenge,
     executeSignedIntent,
+    verifyPaymentIntent,
     listPayments,
     listReconciliationCandidates,
     listReconciliationRecords,

@@ -804,6 +804,33 @@ function createReceiptApiMiddleware(options = {}) {
         return;
       }
 
+      if (req.method === "POST" && url.pathname === "/api/payments/verify") {
+        let body = {};
+        try {
+          body = await readRequestBody(req);
+        } catch {
+          writeJson(res, 400, { error: "Invalid JSON payload" });
+          return;
+        }
+
+        try {
+          const result = await paymentIntentService.verifyPaymentIntent({
+            intent: body.intent || null,
+            signature: body.signature || "",
+            expectedPayer: body.expectedPayer || "",
+            requestId: body.requestId || body.intent?.requestId || "",
+          });
+          writeJson(res, 200, result);
+        } catch (error) {
+          writeJson(res, 400, {
+            error: error.message || "Payment verification failed",
+            code: error.code || "payment_verification_failed",
+            details: error.details || null,
+          });
+        }
+        return;
+      }
+
       // Execute signed intent
       if (req.method === "POST" && url.pathname === "/api/payments/execute") {
         let body = {};
