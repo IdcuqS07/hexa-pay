@@ -214,7 +214,7 @@ export default function PayerPayQuote({ quoteId }: PayerPayQuoteProps) {
                 borderRadius: "4px",
                 marginBottom: "15px"
               }}>
-                <strong>ℹ️ Bootstrap Mode:</strong>
+                <strong>ℹ️ Current Encryption Mode:</strong>
                 <p style={{ marginBottom: 0, fontSize: "14px" }}>
                   Amount is encrypted and cannot be previewed yet.
                   You are making a blind payment (trusted merchant).

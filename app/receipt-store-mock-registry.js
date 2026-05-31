@@ -9,9 +9,9 @@ import {
 
 export const MOCK_REGISTRY_RECEIPT_STORE_KEY = "hexapay.privateQuotes.mockRegistry.v1";
 const MOCK_REGISTRY_SOURCE_OF_TRUTH = {
-  mode: "mock-registry",
-  authority: "browser-local-storage",
-  readiness: "bootstrap",
+  mode: "registry",
+  authority: "browser-registry",
+  readiness: "browser-fallback",
 };
 
 function safeReadStorage(key) {
@@ -89,8 +89,8 @@ export class MockRegistryReceiptStore extends ReceiptStore {
     }
 
     const receipt = readRegistry().find((entry) => entry.quoteId === normalizedQuoteId) || null;
-    return projectReceiptForRole(receipt, role, {
-      transport: "mock-registry",
+      return projectReceiptForRole(receipt, role, {
+      transport: "registry",
       sourceOfTruth: MOCK_REGISTRY_SOURCE_OF_TRUTH,
     });
   }
@@ -99,7 +99,7 @@ export class MockRegistryReceiptStore extends ReceiptStore {
     return readRegistry()
       .map((receipt) =>
         projectReceiptForRole(receipt, role, {
-          transport: "mock-registry",
+          transport: "registry",
           sourceOfTruth: MOCK_REGISTRY_SOURCE_OF_TRUTH,
         }),
       )

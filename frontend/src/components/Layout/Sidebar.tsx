@@ -72,7 +72,7 @@ export default function Sidebar() {
       <div className="mt-auto p-4 border-t border-slate-800">
         <div className="text-xs text-slate-500 text-center">
           <p>Built with Fhenix FHE</p>
-          <p className="mt-1">Bootstrap Phase</p>
+          <p className="mt-1">Live routes • simplified quote encryption</p>
         </div>
       </div>
     </aside>

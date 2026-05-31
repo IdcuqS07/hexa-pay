@@ -47,7 +47,7 @@ export default function PublicLayout() {
       <footer className="mt-auto border-t border-slate-800 bg-slate-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="text-center text-slate-400 text-sm">
-            <p>Built with Fhenix FHE • Bootstrap Phase</p>
+            <p>Built with Fhenix FHE • Live routes with simplified quote encryption</p>
             <div className="mt-2 flex items-center justify-center gap-4">
               <a
                 href="https://docs.fhenix.zone"

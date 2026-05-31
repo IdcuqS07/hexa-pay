@@ -241,7 +241,7 @@ export default function MerchantCreateQuote() {
         border: "1px solid #ffeaa7",
         borderRadius: "4px"
       }}>
-        <strong>ℹ️ Bootstrap Mode:</strong>
+        <strong>ℹ️ Current Encryption Mode:</strong>
         <p style={{ marginBottom: 0, fontSize: "14px" }}>
           Currently using simplified encryption (hash-based). 
           Amount is encrypted but preview is not available yet.

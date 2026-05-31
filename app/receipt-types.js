@@ -17,16 +17,16 @@ export const ReceiptRecordTypes = {
 export function createReceiptSourceOfTruth(sourceOfTruth = {}) {
   if (!sourceOfTruth || typeof sourceOfTruth !== "object") {
     return {
-      mode: "local",
-      authority: "browser-local-storage",
-      readiness: "bootstrap",
+      mode: "api",
+      authority: "hexapay-receipt-service",
+      readiness: "live-persistent",
     };
   }
 
   return {
-    mode: String(sourceOfTruth.mode || "local"),
-    authority: String(sourceOfTruth.authority || "browser-local-storage"),
-    readiness: String(sourceOfTruth.readiness || "bootstrap"),
+    mode: String(sourceOfTruth.mode || "api"),
+    authority: String(sourceOfTruth.authority || "hexapay-receipt-service"),
+    readiness: String(sourceOfTruth.readiness || "live-persistent"),
   };
 }
 
@@ -52,7 +52,7 @@ function buildCanonicalReceiptMeta(receipt = {}, options = {}) {
     recordType: ReceiptRecordTypes.CANONICAL,
     projectionVersion: RECEIPT_PROJECTION_SCHEMA_VERSION,
     createdAt: Number(receipt.meta?.createdAt || Date.now()),
-    source: String(receipt.meta?.source || "bootstrap"),
+    source: String(receipt.meta?.source || "payment-settlement"),
     sourceOfTruth,
     eventRef: {
       ...(receipt.meta?.eventRef && typeof receipt.meta.eventRef === "object" ? receipt.meta.eventRef : {}),

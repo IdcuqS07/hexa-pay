@@ -55,7 +55,7 @@ export function createReceiptAccessBridge(receipt, role, visibility, options = {
 
   return {
     version: 1,
-    phase: "bootstrap",
+    phase: "live",
     transport: String(options.transport || DEFAULT_RECEIPT_ACCESS_TRANSPORT),
     role,
     visibility,

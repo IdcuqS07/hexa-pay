@@ -99,9 +99,9 @@ export default function PrivateQuotesPage() {
         </div>
 
         <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-          <div className="font-medium text-amber-300">Bootstrap Mode</div>
+          <div className="font-medium text-amber-300">Current Encryption Mode</div>
           <div className="mt-2 text-sm text-slate-300">
-            Amount is still using hash-based mock encryption. Native FHE upgrade
+            Amount is still using a simplified hash-based encryption handle. Native FHE upgrade
             comes next.
           </div>
 

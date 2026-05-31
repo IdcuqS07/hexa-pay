@@ -68,15 +68,15 @@ function Home() {
 
       <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6 mb-6">
         <h3 className="text-xl font-semibold text-amber-300 mb-3">
-          ℹ️ Bootstrap Mode
+          ℹ️ Current Encryption Mode
         </h3>
         <p className="text-slate-300 mb-3">
-          Currently running in bootstrap mode with simplified encryption.
+          Live receipt and payment routes are active. Private quote amounts still use a simplified encryption path.
         </p>
         <ul className="space-y-2 text-slate-300">
           <li className="flex items-start gap-2">
             <span className="text-amber-400">•</span>
-            <span>Amounts are encrypted using hash-based mock</span>
+            <span>Amounts use a temporary hash-based encryption handle</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-amber-400">•</span>

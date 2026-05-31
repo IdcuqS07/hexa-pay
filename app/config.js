@@ -1,8 +1,20 @@
 export const PRIVATE_QUOTE_STORE_MODE_STORAGE_KEY = "pq.storeMode";
-export const PRIVATE_QUOTE_STORE_MODES = ["local", "mock-registry", "mock-api"];
-export const PRIVATE_QUOTE_PHASE_LABEL = "Bootstrap";
-export const DEFAULT_LIVE_PRIVATE_QUOTE_STORE_MODE = "mock-api";
+export const PRIVATE_QUOTE_STORE_MODES = ["api", "registry", "local"];
+export const PRIVATE_QUOTE_PHASE_LABEL = "Live";
+export const DEFAULT_LIVE_PRIVATE_QUOTE_STORE_MODE = "api";
 let forceLivePrivateQuoteStoreMode = false;
+
+const PRIVATE_QUOTE_STORE_MODE_ALIASES = {
+  api: "api",
+  "mock-api": "api",
+  registry: "registry",
+  "mock-registry": "registry",
+  local: "local",
+};
+
+export function normalizePrivateQuoteStoreMode(mode) {
+  return PRIVATE_QUOTE_STORE_MODE_ALIASES[String(mode || "").trim().toLowerCase()] || "";
+}
 
 export function isLocalDevelopmentHost() {
   if (typeof window === "undefined") {
@@ -34,13 +46,26 @@ export function setPrivateQuoteLiveModeOverride(forceLive = false) {
 }
 
 export function getDefaultPrivateQuoteStoreMode() {
-  return isPrivateQuoteDevControlsEnabled()
-    ? "local"
-    : DEFAULT_LIVE_PRIVATE_QUOTE_STORE_MODE;
+  return DEFAULT_LIVE_PRIVATE_QUOTE_STORE_MODE;
 }
 
 export function isValidPrivateQuoteStoreMode(mode) {
-  return PRIVATE_QUOTE_STORE_MODES.includes(String(mode || ""));
+  return PRIVATE_QUOTE_STORE_MODES.includes(normalizePrivateQuoteStoreMode(mode));
+}
+
+export function getPrivateQuoteStoreModeOptions() {
+  const options = [
+    { value: "api", label: "Receipt API" },
+  ];
+
+  if (isPrivateQuoteDevControlsEnabled()) {
+    options.push(
+      { value: "registry", label: "Browser Registry" },
+      { value: "local", label: "Browser Local" },
+    );
+  }
+
+  return options;
 }
 
 export function getPrivateQuoteStoreMode() {
@@ -53,14 +78,16 @@ export function getPrivateQuoteStoreMode() {
   }
 
   const params = new URLSearchParams(window.location.search);
-  const queryMode = params.get("storeMode");
+  const queryMode = normalizePrivateQuoteStoreMode(params.get("storeMode"));
 
   if (isValidPrivateQuoteStoreMode(queryMode)) {
     return queryMode;
   }
 
   try {
-    const storedMode = window.localStorage.getItem(PRIVATE_QUOTE_STORE_MODE_STORAGE_KEY);
+    const storedMode = normalizePrivateQuoteStoreMode(
+      window.localStorage.getItem(PRIVATE_QUOTE_STORE_MODE_STORAGE_KEY),
+    );
 
     if (isValidPrivateQuoteStoreMode(storedMode)) {
       return storedMode;
@@ -75,7 +102,7 @@ export function getPrivateQuoteStoreMode() {
 export function setPrivateQuoteStoreMode(mode, { syncUrl = true } = {}) {
   const nextMode = isPrivateQuoteDevControlsEnabled()
     ? isValidPrivateQuoteStoreMode(mode)
-      ? String(mode)
+      ? normalizePrivateQuoteStoreMode(mode)
       : getDefaultPrivateQuoteStoreMode()
     : DEFAULT_LIVE_PRIVATE_QUOTE_STORE_MODE;
 
@@ -88,7 +115,7 @@ export function setPrivateQuoteStoreMode(mode, { syncUrl = true } = {}) {
 
     if (syncUrl) {
       const url = new URL(window.location.href);
-      if (isPrivateQuoteDevControlsEnabled()) {
+      if (isPrivateQuoteDevControlsEnabled() && nextMode !== DEFAULT_LIVE_PRIVATE_QUOTE_STORE_MODE) {
         url.searchParams.set("storeMode", nextMode);
       } else {
         url.searchParams.delete("storeMode");
@@ -101,21 +128,23 @@ export function setPrivateQuoteStoreMode(mode, { syncUrl = true } = {}) {
 }
 
 export function getPrivateQuoteStoreModeLabel(mode = getPrivateQuoteStoreMode()) {
-  switch (String(mode || "")) {
-    case "mock-api":
-      return "Mock API";
-    case "mock-registry":
-      return "Mock Registry";
+  switch (normalizePrivateQuoteStoreMode(mode)) {
+    case "api":
+      return "Receipt API";
+    case "registry":
+      return "Browser Registry";
     case "local":
     default:
-      return "Local";
+      return "Browser Local";
   }
 }
 
 export function appendPrivateQuoteStoreMode(url, mode = getPrivateQuoteStoreMode()) {
   const nextUrl = url instanceof URL ? new URL(url.toString()) : new URL(String(url), window.location.origin);
-  const nextMode = isValidPrivateQuoteStoreMode(mode) ? String(mode) : getPrivateQuoteStoreMode();
-  if (isPrivateQuoteDevControlsEnabled()) {
+  const nextMode = isValidPrivateQuoteStoreMode(mode)
+    ? normalizePrivateQuoteStoreMode(mode)
+    : getPrivateQuoteStoreMode();
+  if (isPrivateQuoteDevControlsEnabled() && nextMode !== DEFAULT_LIVE_PRIVATE_QUOTE_STORE_MODE) {
     nextUrl.searchParams.set("storeMode", nextMode);
   } else {
     nextUrl.searchParams.delete("storeMode");

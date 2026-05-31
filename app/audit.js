@@ -5,6 +5,7 @@ import { ReceiptRoles } from "./receipt-types.js";
 import {
   appendPrivateQuoteStoreMode,
   getPrivateQuoteStoreMode,
+  getPrivateQuoteStoreModeOptions,
   getPrivateQuoteStoreModeLabel,
   PRIVATE_QUOTE_PHASE_LABEL,
   PRIVATE_QUOTE_STORE_MODE_STORAGE_KEY,
@@ -33,6 +34,21 @@ let receiptStore = createReceiptStore(receiptStoreMode, {
     }),
 });
 let receiptStoreChangeKey = getReceiptStoreChangeKey(receiptStoreMode);
+
+function renderStoreModeOptions(select) {
+  if (!select) {
+    return;
+  }
+
+  const options = getPrivateQuoteStoreModeOptions();
+  const currentMarkup = options
+    .map((option) => `<option value="${option.value}">${option.label}</option>`)
+    .join("");
+
+  if (select.innerHTML !== currentMarkup) {
+    select.innerHTML = currentMarkup;
+  }
+}
 
 function syncReceiptStoreMode(mode, { syncUrl = true } = {}) {
   receiptStoreMode = setPrivateQuoteStoreMode(mode, { syncUrl });
@@ -109,6 +125,7 @@ function render() {
   }
 
   if (storeModeField) {
+    renderStoreModeOptions(storeModeField);
     storeModeField.value = receiptStoreMode;
     storeModeField.disabled = state.busyCommand !== "";
   }

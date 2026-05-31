@@ -3,9 +3,9 @@ import { normalizeReceiptRecord, ReceiptRoles } from "./receipt-types.js";
 
 export const API_RECEIPT_STORE_SYNC_KEY = "hexapay.privateQuotes.apiSync.v1";
 const API_RECEIPT_SOURCE_OF_TRUTH = {
-  mode: "mock-api",
-  authority: "api-receipt-store",
-  readiness: "shared-adapter-ready",
+  mode: "api",
+  authority: "hexapay-receipt-service",
+  readiness: "live-persistent",
 };
 
 function stringifyApiMessage(value, fallback = "") {

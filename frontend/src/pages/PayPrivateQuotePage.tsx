@@ -186,10 +186,10 @@ export default function PayPrivateQuotePage() {
               <>
                 <div className="mt-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-100">
                   <div className="font-semibold text-amber-300">
-                    Bootstrap Mode
+                    Current Encryption Mode
                   </div>
                   <div className="mt-1 text-sm">
-                    Amount is currently protected with hash-based mock
+                    Amount is currently protected with a simplified hash-based
                     encryption. Payment is processed as blind payment for local
                     validation.
                   </div>

@@ -867,7 +867,7 @@ function createReceiptApiMiddleware(options = {}) {
 
 function createMockReceiptApiPlugin(options = {}) {
   return {
-    name: "mock-receipt-api",
+    name: "receipt-api",
     configureServer(server) {
       server.middlewares.use(createReceiptApiMiddleware(options));
     },

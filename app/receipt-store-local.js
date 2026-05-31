@@ -14,7 +14,7 @@ const LEGACY_LATEST_RECEIPT_KEY = "hexapay.private-quote.latest-receipt.v1";
 const LOCAL_RECEIPT_SOURCE_OF_TRUTH = {
   mode: "local",
   authority: "browser-local-storage",
-  readiness: "bootstrap",
+  readiness: "browser-fallback",
 };
 
 function safeReadStorage(key) {

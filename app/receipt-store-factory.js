@@ -7,14 +7,15 @@ import {
   API_RECEIPT_STORE_SYNC_KEY,
 } from "./receipt-store-api.js";
 import { LocalReceiptStore, LOCAL_RECEIPT_STORE_KEY } from "./receipt-store-local.js";
+import { normalizePrivateQuoteStoreMode } from "./config.js";
 
-export const DEFAULT_RECEIPT_STORE_MODE = "local";
+export const DEFAULT_RECEIPT_STORE_MODE = "api";
 
 export function createReceiptStore(mode = DEFAULT_RECEIPT_STORE_MODE, options = {}) {
-  switch (mode) {
-    case "mock-api":
+  switch (normalizePrivateQuoteStoreMode(mode)) {
+    case "api":
       return new ApiReceiptStore(options);
-    case "mock-registry":
+    case "registry":
       return new MockRegistryReceiptStore();
     case "local":
     default:
@@ -23,10 +24,10 @@ export function createReceiptStore(mode = DEFAULT_RECEIPT_STORE_MODE, options = 
 }
 
 export function getReceiptStoreChangeKey(mode = DEFAULT_RECEIPT_STORE_MODE) {
-  switch (mode) {
-    case "mock-api":
+  switch (normalizePrivateQuoteStoreMode(mode)) {
+    case "api":
       return API_RECEIPT_STORE_SYNC_KEY;
-    case "mock-registry":
+    case "registry":
       return MOCK_REGISTRY_RECEIPT_STORE_KEY;
     case "local":
       return LOCAL_RECEIPT_STORE_KEY;

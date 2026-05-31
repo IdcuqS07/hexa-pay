@@ -3,25 +3,139 @@ import type { BrowserProvider, JsonRpcSigner, ContractRunner } from "ethers";
 import { QuoteStatus, type QuoteView } from "./privateQuoteTypes";
 import PrivateMerchantQuoteABI from "../abi/PrivateMerchantQuote.json";
 
-const CONTRACT_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
+const DEFAULT_ARB_SEPOLIA_CHAIN_ID = 421614;
+const DEFAULT_ARB_SEPOLIA_CHAIN_ID_HEX = "0x66eee";
+const DEFAULT_ARB_SEPOLIA_RPC_URL = "https://sepolia-rollup.arbitrum.io/rpc";
 
-const ANVIL_CHAIN_ID_HEX = "0x7a69";
+type PrivateQuoteRuntimeConfig = {
+  address: string;
+  chainId: number;
+  chainIdHex: string;
+  chainName: string;
+  rpcUrls: string[];
+};
+
+let runtimeConfigPromise: Promise<PrivateQuoteRuntimeConfig> | null = null;
+
+function normalizePositiveInteger(value: unknown, fallback: number): number {
+  const normalized = Number.parseInt(String(value ?? fallback), 10);
+  return Number.isFinite(normalized) && normalized > 0 ? normalized : fallback;
+}
+
+function toChainHex(chainId: number): string {
+  return `0x${Number(chainId).toString(16)}`;
+}
+
+function resolveChainName(chainId: number): string {
+  if (chainId === DEFAULT_ARB_SEPOLIA_CHAIN_ID) {
+    return "Arbitrum Sepolia";
+  }
+
+  if (chainId === 31337) {
+    return "Anvil Local";
+  }
+
+  return `Chain ${chainId}`;
+}
+
+function resolveRpcUrls(chainId: number): string[] {
+  const envRpc = String(import.meta.env.VITE_PRIVATE_QUOTE_RPC_URL || "").trim();
+
+  if (envRpc) {
+    return [envRpc];
+  }
+
+  if (chainId === DEFAULT_ARB_SEPOLIA_CHAIN_ID) {
+    return [DEFAULT_ARB_SEPOLIA_RPC_URL];
+  }
+
+  if (chainId === 31337) {
+    return ["http://127.0.0.1:8545"];
+  }
+
+  return [DEFAULT_ARB_SEPOLIA_RPC_URL];
+}
+
+function createRuntimeConfig(address: string, chainId: number): PrivateQuoteRuntimeConfig {
+  return {
+    address,
+    chainId,
+    chainIdHex: toChainHex(chainId),
+    chainName: resolveChainName(chainId),
+    rpcUrls: resolveRpcUrls(chainId),
+  };
+}
+
+async function loadPrivateQuoteRuntimeConfig({
+  refresh = false,
+}: {
+  refresh?: boolean;
+} = {}): Promise<PrivateQuoteRuntimeConfig> {
+  if (!runtimeConfigPromise || refresh) {
+    runtimeConfigPromise = (async () => {
+      const envAddress = String(import.meta.env.VITE_PRIVATE_QUOTE_CONTRACT || "").trim();
+      const envChainId = normalizePositiveInteger(
+        import.meta.env.VITE_PRIVATE_QUOTE_CHAIN_ID,
+        DEFAULT_ARB_SEPOLIA_CHAIN_ID,
+      );
+
+      try {
+        const response = await fetch(`/deployment-private-quote.json?t=${Date.now()}`, {
+          cache: "no-store",
+        });
+
+        if (response.ok) {
+          const payload = await response.json();
+          const rawAddress = String(
+            payload?.contracts?.PrivateMerchantQuote ||
+              payload?.ui?.addresses?.privateQuote ||
+              payload?.privateQuote ||
+              payload?.address ||
+              envAddress,
+          ).trim();
+
+          if (rawAddress) {
+            return createRuntimeConfig(
+              ethers.getAddress(rawAddress),
+              normalizePositiveInteger(payload?.chainId, envChainId),
+            );
+          }
+        }
+      } catch (error) {
+        error;
+      }
+
+      if (envAddress) {
+        return createRuntimeConfig(ethers.getAddress(envAddress), envChainId);
+      }
+
+      throw new Error(
+        "Private quote deployment manifest is not available. Set VITE_PRIVATE_QUOTE_CONTRACT or publish deployment-private-quote.json first.",
+      );
+    })();
+  }
+
+  return runtimeConfigPromise;
+}
 
 export async function ensureCorrectNetwork() {
   if (!(window as any).ethereum) {
     throw new Error("Wallet not found");
   }
 
+  const config = await loadPrivateQuoteRuntimeConfig();
   const chainId = await (window as any).ethereum.request({
     method: "eth_chainId",
   });
 
-  if (chainId === ANVIL_CHAIN_ID_HEX) return;
+  if (String(chainId).toLowerCase() === config.chainIdHex.toLowerCase()) {
+    return;
+  }
 
   try {
     await (window as any).ethereum.request({
       method: "wallet_switchEthereumChain",
-      params: [{ chainId: ANVIL_CHAIN_ID_HEX }],
+      params: [{ chainId: config.chainIdHex }],
     });
   } catch (switchError: any) {
     if (switchError.code === 4902) {
@@ -29,9 +143,9 @@ export async function ensureCorrectNetwork() {
         method: "wallet_addEthereumChain",
         params: [
           {
-            chainId: ANVIL_CHAIN_ID_HEX,
-            chainName: "Anvil Local",
-            rpcUrls: ["http://127.0.0.1:8545"],
+            chainId: config.chainIdHex,
+            chainName: config.chainName,
+            rpcUrls: config.rpcUrls,
             nativeCurrency: {
               name: "ETH",
               symbol: "ETH",
@@ -50,6 +164,7 @@ export async function getBrowserProvider(): Promise<BrowserProvider> {
   if (!(window as any).ethereum) {
     throw new Error("Wallet not found");
   }
+
   return new ethers.BrowserProvider((window as any).ethereum);
 }
 
@@ -59,12 +174,14 @@ export async function getSigner(): Promise<JsonRpcSigner> {
 }
 
 export async function getPrivateQuoteContract(runner?: ContractRunner) {
+  const config = await loadPrivateQuoteRuntimeConfig();
+
   if (runner) {
-    return new ethers.Contract(CONTRACT_ADDRESS, PrivateMerchantQuoteABI, runner);
+    return new ethers.Contract(config.address, PrivateMerchantQuoteABI, runner);
   }
 
   const provider = await getBrowserProvider();
-  return new ethers.Contract(CONTRACT_ADDRESS, PrivateMerchantQuoteABI, provider);
+  return new ethers.Contract(config.address, PrivateMerchantQuoteABI, provider);
 }
 
 export function encryptAmountBootstrap(amount: number): string {
@@ -76,9 +193,7 @@ export function buildQuoteId(debugFixed = false): string {
     return "0x1111111111111111111111111111111111111111111111111111111111111111";
   }
 
-  return ethers.keccak256(
-    ethers.toUtf8Bytes(`${Date.now()}_${Math.random()}`)
-  );
+  return ethers.keccak256(ethers.toUtf8Bytes(`${Date.now()}_${Math.random()}`));
 }
 
 export async function createPrivateQuote(params: {
@@ -102,17 +217,10 @@ export async function createPrivateQuote(params: {
 
   const feeData = await provider.getFeeData();
 
-  const tx = await contract.createQuote(
-    id,
-    params.payer,
-    amountCt,
-    expiry,
-    {
-      maxFeePerGas: (feeData.maxFeePerGas ?? 30_000_000n) * 2n,
-      maxPriorityFeePerGas:
-        (feeData.maxPriorityFeePerGas ?? 1_000_000n) * 2n,
-    }
-  );
+  const tx = await contract.createQuote(id, params.payer, amountCt, expiry, {
+    maxFeePerGas: (feeData.maxFeePerGas ?? 30_000_000n) * 2n,
+    maxPriorityFeePerGas: (feeData.maxPriorityFeePerGas ?? 1_000_000n) * 2n,
+  });
 
   await tx.wait();
 
@@ -204,6 +312,10 @@ export function getReadableError(err: any) {
 
   if (msg.includes("Wallet not found")) {
     return "Please install or unlock your wallet.";
+  }
+
+  if (msg.includes("deployment manifest is not available")) {
+    return "Private quote deployment is not configured yet for this environment.";
   }
 
   return msg || "Unknown error";

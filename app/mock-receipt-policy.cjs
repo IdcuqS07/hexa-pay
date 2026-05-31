@@ -561,7 +561,7 @@ function createReceiptReadModel(receipt, viewerContext) {
     recordType: ReceiptRecordTypes.PROJECTION,
     projectionVersion: RECEIPT_PROJECTION_SCHEMA_VERSION,
     role: viewerContext.role,
-    transport: "mock-api",
+    transport: "api",
     canonical: {
       recordType: String(receipt.meta?.recordType || ReceiptRecordTypes.CANONICAL),
       schemaVersion: Number(receipt.meta?.schemaVersion || receipt.meta?.version || 0),
@@ -795,8 +795,8 @@ function createReceiptAccessBridge(receipt, decision, viewerContext, fieldDisclo
 
   return {
     version: 1,
-    phase: "bootstrap",
-    transport: "mock-api",
+    phase: "live",
+    transport: "api",
     role: viewerContext.role,
     visibility: decision.effect,
     scope: resolveAccessScope(decision.effect),
@@ -848,7 +848,7 @@ function createReceiptAccessBridge(receipt, decision, viewerContext, fieldDisclo
 function createReceiptAccessPolicy(decision) {
   return {
     version: 1,
-    phase: "bootstrap",
+    phase: "live",
     status: decision.status,
     effect: decision.effect,
     code: decision.code,

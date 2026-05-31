@@ -1,8 +1,8 @@
 const crypto = require("crypto");
 
-const DEFAULT_RECEIPT_ISSUER_ID = "hexapay.mock-receipt-api";
+const DEFAULT_RECEIPT_ISSUER_ID = "hexapay.receipt-api";
 const DEFAULT_RECEIPT_ISSUER_KEY_ID = "dev-seed-v1";
-const DEFAULT_RECEIPT_ISSUER_SEED = "hexapay.private-quotes.mock-receipt-issuer.seed.v1";
+const DEFAULT_RECEIPT_ISSUER_SEED = "hexapay.private-quotes.receipt-issuer.seed.v1";
 
 function normalizeIssuerPurpose(purpose) {
   const normalizedPurpose = String(purpose || "")

@@ -25,9 +25,9 @@ const { createLazySharedInstance } = require('./lazy-shared-instance.cjs');
 const RECEIPT_CANONICAL_SCHEMA_VERSION = 3;
 const RECEIPT_PROJECTION_SCHEMA_VERSION = 1;
 const RECEIPT_SOURCE_OF_TRUTH = {
-  mode: "mock-api",
-  authority: "vite-mock-service",
-  readiness: "shared-adapter-ready",
+  mode: "api",
+  authority: "hexapay-receipt-service",
+  readiness: "live-persistent",
 };
 
 function normalizeReceipt(receipt) {
@@ -63,7 +63,7 @@ function normalizeReceipt(receipt) {
       recordType: "canonical-receipt",
       projectionVersion: RECEIPT_PROJECTION_SCHEMA_VERSION,
       createdAt: Number(receipt.meta?.createdAt || Date.now()),
-      source: String(receipt.meta?.source || "bootstrap"),
+      source: String(receipt.meta?.source || "payment-settlement"),
       sourceOfTruth: {
         ...(receipt.meta?.sourceOfTruth && typeof receipt.meta.sourceOfTruth === "object"
           ? receipt.meta.sourceOfTruth

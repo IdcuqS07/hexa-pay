@@ -162,17 +162,17 @@ The active roadmap is tracked in [ROADMAP_HEXAPAY.md](./ROADMAP_HEXAPAY.md). The
 
 - Copy `.env.example` into `.env` before running deployment or network-specific scripts.
 - `.env.example` now defaults `SETTLEMENT_TOKEN_ADDRESS` to Circle USDC on Arbitrum Sepolia testnet.
-- Mock receipt canonical storage can be switched with `MOCK_RECEIPT_REGISTRY_MODE=memory|file|http|redis`.
-- File-backed mock receipt canonical storage defaults to `.hexapay/mock-receipt-registry.json` and can be overridden with `MOCK_RECEIPT_REGISTRY_PATH`.
-- HTTP-backed mock receipt canonical storage expects `MOCK_RECEIPT_REGISTRY_BASE_URL` and optionally `MOCK_RECEIPT_REGISTRY_STORE_ID` (default `registry`).
-- Redis-backed mock receipt canonical storage uses `HEXAPAY_REDIS_URL` (or `MOCK_RECEIPT_REDIS_URL`) and shares state safely across Vercel/serverless instances.
-- Mock receipt challenge storage can be switched with `MOCK_RECEIPT_CHALLENGE_REGISTRY_MODE=memory|file|http|redis`.
-- File-backed mock receipt challenge storage defaults to `.hexapay/mock-receipt-challenge-registry.json` and can be overridden with `MOCK_RECEIPT_CHALLENGE_REGISTRY_PATH`.
-- HTTP-backed mock receipt challenge storage expects `MOCK_RECEIPT_CHALLENGE_REGISTRY_BASE_URL` and optionally `MOCK_RECEIPT_CHALLENGE_REGISTRY_STORE_ID` (default `challenges`).
-- Redis-backed mock receipt challenge storage uses the same shared Redis connection.
+- Receipt API canonical storage can be switched with `MOCK_RECEIPT_REGISTRY_MODE=memory|file|http|redis`.
+- File-backed receipt canonical storage defaults to `.hexapay/mock-receipt-registry.json` and can be overridden with `MOCK_RECEIPT_REGISTRY_PATH`.
+- HTTP-backed receipt canonical storage expects `MOCK_RECEIPT_REGISTRY_BASE_URL` and optionally `MOCK_RECEIPT_REGISTRY_STORE_ID` (default `registry`).
+- Redis-backed receipt canonical storage uses `HEXAPAY_REDIS_URL` (or `MOCK_RECEIPT_REDIS_URL`) and shares state safely across Vercel/serverless instances.
+- Receipt challenge storage can be switched with `MOCK_RECEIPT_CHALLENGE_REGISTRY_MODE=memory|file|http|redis`.
+- File-backed receipt challenge storage defaults to `.hexapay/mock-receipt-challenge-registry.json` and can be overridden with `MOCK_RECEIPT_CHALLENGE_REGISTRY_PATH`.
+- HTTP-backed receipt challenge storage expects `MOCK_RECEIPT_CHALLENGE_REGISTRY_BASE_URL` and optionally `MOCK_RECEIPT_CHALLENGE_REGISTRY_STORE_ID` (default `challenges`).
+- Redis-backed receipt challenge storage uses the same shared Redis connection.
 - Payment ledger storage can be switched with `HEXAPAY_PAYMENT_LEDGER_MODE=memory|file|redis`.
 - For Vercel or any multi-instance deployment, set `HEXAPAY_PAYMENT_LEDGER_MODE=redis` and `HEXAPAY_EXECUTION_DEDUPE_MODE=redis` so payment history and duplicate-execution protection are shared across instances.
-- Both mock receipt registries now share a JSON state-store seam, so file persistence can be replaced by a custom backend/cache store without changing the API contract.
+- Both receipt registries now share a JSON state-store seam, so file persistence can be replaced by a custom backend/cache store without changing the API contract.
 - The shared JSON state-store seam now includes revision metadata and optimistic conflict handling for safer multi-writer migrations.
 - The mock receipt service and Vite mock API are now async-compatible on this persistence seam, which is the last plumbing step before swapping file storage for an actual HTTP/KV/shared backend adapter.
 - The shared mock receipt registries can now point at a remote HTTP state-store control plane that exposes `/api/receipts/_state/:storeId`, which keeps the frontend contract unchanged while backend persistence is swapped underneath.
