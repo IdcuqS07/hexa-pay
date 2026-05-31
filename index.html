@@ -45,8 +45,8 @@
       </nav>
 
       <div class="hp-nav-actions">
-        <a class="hp-btn hp-btn-secondary" href="./app.html#private-quotes">Private Quotes</a>
-        <a class="hp-btn hp-btn-primary" href="./app.html">Launch App</a>
+        <a class="hp-btn hp-btn-secondary" href="/app/private-quotes">Private Quotes</a>
+        <a class="hp-btn hp-btn-primary" href="/app/dashboard">Launch App</a>
       </div>
     </div>
   </header>
@@ -64,12 +64,12 @@
             only surfaces through authorized local reveal or scoped disclosure.
           </p>
           <div class="hp-hero-actions">
-            <a class="hp-btn hp-btn-primary hp-btn-lg" href="./app.html">Launch App</a>
-            <a class="hp-btn hp-btn-secondary hp-btn-lg" href="./payment-intent.html">Open Payment Rail</a>
+            <a class="hp-btn hp-btn-primary hp-btn-lg" href="/app/dashboard">Launch App</a>
+            <a class="hp-btn hp-btn-secondary hp-btn-lg" href="/payment-intent">Open Payment Rail</a>
           </div>
           <p class="hp-hero-caption">
             Live app includes company registration, payment rail execution, private quotes,
-            `pay.html` payer routing, `audit.html` auditor routing, invoices, and the deeper contract workspace.
+            `/pay` payer routing, `/audit` auditor routing, invoices, and the deeper contract workspace.
           </p>
           <div class="hp-chip-row" aria-label="HexaPay trust states">
             <span class="hp-status-chip is-blue">Encrypted by default</span>
@@ -169,8 +169,8 @@
             <h3>Contract-backed operator shell</h3>
             <p>Start from the main app dashboard for company setup, manifest sync, wallet connection, invoices, treasury, and the embedded payment rail.</p>
             <div class="hp-card-actions">
-              <a class="hp-btn hp-btn-secondary" href="./app.html#dashboard">Open Dashboard</a>
-              <a class="hp-btn hp-btn-secondary" href="./hexapay.html?entry=homepage">Open Workspace</a>
+              <a class="hp-btn hp-btn-secondary" href="/app/dashboard">Open Dashboard</a>
+              <a class="hp-btn hp-btn-secondary" href="/workspace?entry=homepage">Open Workspace</a>
             </div>
           </article>
 
@@ -179,28 +179,28 @@
             <h3>Standalone and embedded</h3>
             <p>The secure payment rail lives inside APP and also has its own focused route for intent signing, approval, and onchain execution.</p>
             <div class="hp-card-actions">
-              <a class="hp-btn hp-btn-secondary" href="./payment-intent.html">Open Payment Rail</a>
-              <a class="hp-btn hp-btn-secondary" href="./app.html#dashboard">Open in APP</a>
+              <a class="hp-btn hp-btn-secondary" href="/payment-intent">Open Payment Rail</a>
+              <a class="hp-btn hp-btn-secondary" href="/app/dashboard">Open in APP</a>
             </div>
           </article>
 
           <article class="hp-security-card" data-reveal id="private-quotes">
             <span class="hp-kicker">Private Quotes</span>
             <h3>Merchant flow with payer route</h3>
-            <p>Merchants create a quote in APP, then share `pay.html` for the payer. The public route expects a live quote id when active.</p>
+            <p>Merchants create a quote in APP, then share `/pay/:id` for the payer. The public route expects a live quote id when active.</p>
             <div class="hp-card-actions">
-              <a class="hp-btn hp-btn-secondary" href="./app.html#private-quotes">Open Merchant Shell</a>
-              <a class="hp-btn hp-btn-secondary" href="./pay.html">Open Payer Route</a>
+              <a class="hp-btn hp-btn-secondary" href="/app/private-quotes">Open Merchant Shell</a>
+              <a class="hp-btn hp-btn-secondary" href="/pay">Open Payer Route</a>
             </div>
           </article>
 
           <article class="hp-security-card" data-reveal>
             <span class="hp-kicker">Auditor View</span>
             <h3>Limited receipt disclosure</h3>
-            <p>Auditors inspect a dedicated `audit.html` surface with masked projection, while APP remains the source shell for merchant-side control.</p>
+            <p>Auditors inspect a dedicated `/audit/:id` surface with masked projection, while APP remains the source shell for merchant-side control.</p>
             <div class="hp-card-actions">
-              <a class="hp-btn hp-btn-secondary" href="./audit.html">Open Auditor Surface</a>
-              <a class="hp-btn hp-btn-secondary" href="./app.html#private-quotes">Back to APP</a>
+              <a class="hp-btn hp-btn-secondary" href="/audit">Open Auditor Surface</a>
+              <a class="hp-btn hp-btn-secondary" href="/app/private-quotes">Back to APP</a>
             </div>
           </article>
         </div>
@@ -431,8 +431,8 @@
             </p>
           </div>
           <div class="hp-workspace-actions">
-            <a class="hp-btn hp-btn-primary hp-btn-lg" href="./app.html">Launch App</a>
-            <a class="hp-btn hp-btn-secondary hp-btn-lg" href="./app.html#private-quotes">Open Private Quotes</a>
+            <a class="hp-btn hp-btn-primary hp-btn-lg" href="/app/dashboard">Launch App</a>
+            <a class="hp-btn hp-btn-secondary hp-btn-lg" href="/app/private-quotes">Open Private Quotes</a>
           </div>
         </div>
       </div>
@@ -447,7 +447,7 @@
             Launch the same APP that now handles dashboard actions, payment rail execution, private quotes,
             payer routing, and auditor routing.
           </p>
-          <a class="hp-btn hp-btn-primary hp-btn-lg" href="./app.html">Launch HexaPay App</a>
+          <a class="hp-btn hp-btn-primary hp-btn-lg" href="/app/dashboard">Launch HexaPay App</a>
         </div>
       </div>
     </section>
@@ -467,7 +467,7 @@
         <a href="#payment-rail">Payment Rail</a>
         <a href="#private-quotes">Private Quotes</a>
         <a href="#security">Security</a>
-        <a href="./app.html">Launch App</a>
+        <a href="/app/dashboard">Launch App</a>
       </div>
     </div>
   </footer>

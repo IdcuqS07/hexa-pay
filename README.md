@@ -30,10 +30,10 @@ HexaPay now treats this as the default settlement rail for `arb-sepolia` deploys
 
 ## Product Surfaces
 
-- `index.html`: HexaPay home and product overview
-- `app.html`: product-facing app for day-to-day private finance flows
-- `hexapay.html`: deeper operations workspace and contract console
-- `payment-intent.html`: focused payment rail demo surface for Arbitrum Sepolia
+- `/`: HexaPay home and product overview
+- `/app/dashboard`: product-facing app for day-to-day private finance flows
+- `/workspace`: deeper operations workspace and contract console
+- `/payment-intent`: focused payment rail demo surface for Arbitrum Sepolia
 - `sdk/hexapay-sdk.cjs` and `sdk/hexapay-sdk.mjs`: reusable Wave 5 developer SDK
 
 ## Wave 5 Developer Surface
@@ -75,7 +75,7 @@ Latest live verification in this repo:
 
 Important runtime notes:
 
-- Browser UI at `app.html` or `payment-intent.html` always uses the wallet currently connected in MetaMask or Rabby.
+- Browser UI at `/app/dashboard` or `/payment-intent` always uses the wallet currently connected in MetaMask or Rabby.
 - `TEST_PAYER_PRIVATE_KEY` is only used by the CLI runner `npm run test:payment-flow`.
 - EIP-712 signing must use the `domain` returned by `POST /api/payments/challenges`.
 - For wallet stability on Arbitrum Sepolia, prefer `https://sepolia-rollup.arbitrum.io/rpc`.
@@ -90,8 +90,8 @@ Fhenix Buildathon/
 ├── sdk/                    # Wave 5 developer SDK for create/sign/verify/execute flows
 ├── src/                    # App, workspace, client runtime, and shared styling
 ├── test/                   # Hardhat test suite for core and module behaviors
-├── app.html                # HexaPay App entry
-├── hexapay.html            # HexaPay Workspace entry
+├── app.html                # Legacy compatibility entry for /app/*
+├── hexapay.html            # Legacy compatibility entry for /workspace
 ├── index.html              # Product homepage entry
 ├── README_CONTRACTS.md     # Contract architecture and function summary
 ├── ROADMAP_HEXAPAY.md      # Product and contract roadmap
@@ -108,8 +108,10 @@ npm run dev
 Local entry points:
 
 - `http://localhost:3000/` or the Vite port you run locally for the product homepage
-- `/app.html` for HexaPay App
-- `/hexapay.html` for HexaPay Workspace
+- `/app/dashboard` for HexaPay App
+- `/app/private-quotes` for the merchant quote route
+- `/workspace` for HexaPay Workspace
+- `/payment-intent` for the payment rail demo
 
 ## Core Scripts
 

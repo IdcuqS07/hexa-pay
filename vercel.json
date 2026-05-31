@@ -2,6 +2,40 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/app",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/app/:view(dashboard|send|treasury|invoices|private-quotes|policy|escrow|compliance|analytics|activity)",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/pay",
+      "destination": "/pay.html"
+    },
+    {
+      "source": "/pay/:id",
+      "destination": "/pay.html"
+    },
+    {
+      "source": "/audit",
+      "destination": "/audit.html"
+    },
+    {
+      "source": "/audit/:id",
+      "destination": "/audit.html"
+    },
+    {
+      "source": "/workspace",
+      "destination": "/hexapay.html"
+    },
+    {
+      "source": "/payment-intent",
+      "destination": "/payment-intent.html"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

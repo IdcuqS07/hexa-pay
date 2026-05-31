@@ -1,3 +1,5 @@
+import { buildPayIntentUrl } from "./routes.js";
+
 const SHAREABLE_PAYMENT_INTENT_VERSION = 1;
 
 function normalizeString(value) {
@@ -75,7 +77,7 @@ export function decodeShareablePaymentIntent(encoded = "") {
 export function createShareablePaymentIntentUrl(payload = {}, baseUrl = "") {
   const origin =
     baseUrl ||
-    (typeof window !== "undefined" ? `${window.location.origin}/pay.html` : "http://localhost/pay.html");
+    buildPayIntentUrl();
   const url = new URL(origin, typeof window !== "undefined" ? window.location.origin : "http://localhost");
   url.searchParams.set("intent", encodeShareablePaymentIntent(payload));
   return url.toString();
@@ -84,7 +86,7 @@ export function createShareablePaymentIntentUrl(payload = {}, baseUrl = "") {
 export function getShareablePaymentIntentPayloadFromUrl(href = "") {
   try {
     const base =
-      href || (typeof window !== "undefined" ? window.location.href : "http://localhost/pay.html");
+      href || (typeof window !== "undefined" ? window.location.href : "http://localhost/pay");
     const url = new URL(base, typeof window !== "undefined" ? window.location.origin : "http://localhost");
     return decodeShareablePaymentIntent(url.searchParams.get("intent") || "");
   } catch (error) {

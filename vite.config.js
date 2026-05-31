@@ -3,6 +3,81 @@ const { defineConfig, loadEnv } = require("vite");
 const react = require("@vitejs/plugin-react");
 const { createMockReceiptApiPlugin } = require("./app/mock-receipt-api-plugin.cjs");
 
+function createCleanRouteRewritePlugin() {
+  const rewrites = [
+    {
+      pattern: /^\/app(?:\/(?:dashboard|send|treasury|invoices|private-quotes|policy|escrow|compliance|analytics|activity))?\/?$/,
+      target: "/app.html",
+    },
+    {
+      pattern: /^\/pay(?:\/[^/]+)?\/?$/,
+      target: "/pay.html",
+    },
+    {
+      pattern: /^\/audit(?:\/[^/]+)?\/?$/,
+      target: "/audit.html",
+    },
+    {
+      pattern: /^\/workspace\/?$/,
+      target: "/hexapay.html",
+    },
+    {
+      pattern: /^\/payment-intent\/?$/,
+      target: "/payment-intent.html",
+    },
+  ];
+
+  function shouldRewrite(requestUrl = "", headers = {}) {
+    if (!requestUrl) {
+      return false;
+    }
+
+    const url = new URL(requestUrl, "http://localhost");
+    const accept = String(headers.accept || "");
+
+    if (url.pathname.startsWith("/api/") || /\.[a-z0-9]+$/i.test(url.pathname)) {
+      return false;
+    }
+
+    return accept.includes("text/html") || accept.includes("*/*");
+  }
+
+  function applyRewrite(req) {
+    if (!req?.url || !["GET", "HEAD"].includes(String(req.method || "GET").toUpperCase())) {
+      return;
+    }
+
+    if (!shouldRewrite(req.url, req.headers || {})) {
+      return;
+    }
+
+    const url = new URL(req.url, "http://localhost");
+    const match = rewrites.find((entry) => entry.pattern.test(url.pathname));
+
+    if (!match) {
+      return;
+    }
+
+    req.url = `${match.target}${url.search}`;
+  }
+
+  return {
+    name: "hexapay-clean-route-rewrites",
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        applyRewrite(req);
+        next();
+      });
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        applyRewrite(req);
+        next();
+      });
+    },
+  };
+}
+
 const isolationHeaders = {
   "Cross-Origin-Opener-Policy": "same-origin",
   "Cross-Origin-Embedder-Policy": "require-corp",
@@ -16,7 +91,7 @@ module.exports = defineConfig(({ mode }) => {
   Object.assign(process.env, env);
 
   return {
-    plugins: [react(), createMockReceiptApiPlugin()],
+    plugins: [react(), createCleanRouteRewritePlugin(), createMockReceiptApiPlugin()],
     resolve: {
       alias: [
         {

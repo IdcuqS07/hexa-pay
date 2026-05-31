@@ -4,6 +4,7 @@ import {
   appendPrivateQuoteStoreMode,
   isPrivateQuoteDevControlsEnabled,
 } from "./config.js";
+import { buildPayUrl } from "./routes.js";
 
 const DEFAULT_PRIVATE_QUOTE_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
 const DEFAULT_PRIVATE_QUOTE_CHAIN_ID = "31337";
@@ -168,8 +169,7 @@ export function encryptPrivateQuoteAmountBootstrap(amount) {
 }
 
 export function buildPrivateQuotePaymentLink(quoteId) {
-  const url = appendPrivateQuoteStoreMode(new URL("/pay.html", window.location.origin));
-  url.searchParams.set("id", quoteId);
+  const url = appendPrivateQuoteStoreMode(buildPayUrl(quoteId));
   return url.toString();
 }
 

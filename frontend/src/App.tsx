@@ -125,6 +125,8 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/create" element={<MerchantCreateQuote />} />
           <Route path="/private-quotes" element={<PrivateQuotesPage />} />
+          <Route path="/app/private-quotes" element={<PrivateQuotesPage />} />
+          <Route path="/payment-intent" element={<PaymentIntentDemoPage />} />
           <Route path="/payment-intent-demo" element={<PaymentIntentDemoPage />} />
         </Route>
 

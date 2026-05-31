@@ -9,6 +9,15 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/src/styles/main.css">
+  <script>
+    (function () {
+      if (!/\/hexapay\.html\/?$/.test(window.location.pathname)) {
+        return;
+      }
+      const url = new URL(window.location.href);
+      window.location.replace(`/workspace${url.search}`);
+    })();
+  </script>
 </head>
 <body class="subpage-body">
   <main class="subpage-shell">
@@ -27,7 +36,7 @@
       </p>
       <div class="subpage-actions">
         <a class="btn-primary btn-xl" href="./index.html">Return to HexaPay Home</a>
-        <a class="btn-outline btn-xl" href="./app.html">Return to HexaPay App</a>
+        <a class="btn-outline btn-xl" href="/app/dashboard">Return to HexaPay App</a>
       </div>
     </section>
 

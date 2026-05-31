@@ -37,6 +37,12 @@ import {
   WALLET_SESSION_STORAGE_KEY,
 } from "./wallet-session.js";
 import * as reconciliationUi from "./payment-reconciliation-ui.js";
+import {
+  buildAppUrl,
+  buildPayIntentUrl,
+  buildPayUrl,
+  getPayQuoteIdFromLocation,
+} from "./routes.js";
 
 const state = {
   config: null,
@@ -51,7 +57,7 @@ const state = {
     walletName: "",
   },
   fhenix: createDefaultFhenixState(),
-  quoteId: new URL(window.location.href).searchParams.get("id") || "",
+  quoteId: getPayQuoteIdFromLocation(),
   intentEntry: new URL(window.location.href).searchParams.get("entry") || "",
   intentRequest: getShareablePaymentIntentPayloadFromUrl(),
   intentExecution: null,
@@ -573,10 +579,10 @@ function render() {
     if (backLink) {
       backLink.href =
         sourceKey === "pos"
-          ? `${window.location.origin}/app.html#private-quotes`
+          ? buildAppUrl("private-quotes")
           : sourceKey === "invoice"
-            ? `${window.location.origin}/app.html#invoices`
-            : `${window.location.origin}/app.html#dashboard`;
+            ? buildAppUrl("invoices")
+            : buildAppUrl("dashboard");
       backLink.textContent =
         sourceKey === "pos"
           ? "Back to POS Mode"
@@ -585,7 +591,7 @@ function render() {
             : "Back to Dashboard";
     }
 
-    route.textContent = `Route: /pay.html?intent=... (${entryLabel})`;
+    route.textContent = `Route: ${buildPayIntentUrl({ absolute: false })}?intent=... (${entryLabel})`;
     summary.innerHTML = `
       <div class="summary-row">
         <span>Status</span>
@@ -808,7 +814,7 @@ function render() {
           <span>Remaining outstanding</span>
           <strong>${escapeHtml(
             intentRequest.invoiceId
-              ? "Reveal in the invoice workspace after the merchant opens app.html"
+              ? "Reveal in the invoice workspace after the merchant opens /app/invoices"
               : "Not available",
           )}</strong>
         </div>
@@ -877,14 +883,14 @@ function render() {
 
   if (backLink) {
     backLink.href = appendPrivateQuoteStoreMode(
-      `${window.location.origin}/app.html#private-quotes`,
+      buildAppUrl("private-quotes"),
       receiptStoreMode,
     ).toString();
     backLink.textContent = "Back to Private Quotes";
   }
 
   route.textContent = state.quoteId
-    ? `Route: /pay.html?id=${state.quoteId}`
+    ? `Route: ${buildPayUrl(state.quoteId, { absolute: false })}`
     : "Missing quote id in the URL. Open this page from the generated payment link.";
 
   if (!state.quoteId) {

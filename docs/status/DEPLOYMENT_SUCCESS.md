@@ -32,7 +32,7 @@ This verification included:
 
 ## Runtime Notes
 
-- Browser UI at `app.html` and `payment-intent.html` always uses the currently connected wallet in MetaMask or Rabby.
+- Browser UI at `/app/dashboard` and `/payment-intent` always uses the currently connected wallet in MetaMask or Rabby.
 - `TEST_PAYER_PRIVATE_KEY` is only used by `npm run test:payment-flow`.
 - The signature domain must come from `POST /api/payments/challenges`.
 - The backend executor now queues writes and retries one nonce-conflict to reduce `nonce too low` and `nonce has already been used` failures.
@@ -92,7 +92,7 @@ npm run test:payment-flow
 
 ### Browser
 
-1. open `http://localhost:3000/app.html`
+1. open `http://localhost:3000/app/dashboard`
 2. connect the intended payer wallet
 3. switch to Arbitrum Sepolia
 4. ensure the wallet has ETH and USDC

@@ -10,9 +10,14 @@ import {
   PRIVATE_QUOTE_STORE_MODE_STORAGE_KEY,
   setPrivateQuoteStoreMode,
 } from "./config.js";
+import {
+  buildAppUrl,
+  buildAuditUrl,
+  getAuditQuoteIdFromLocation,
+} from "./routes.js";
 
 const state = {
-  quoteId: new URL(window.location.href).searchParams.get("id") || "",
+  quoteId: getAuditQuoteIdFromLocation(),
   receipt: null,
   busyCommand: "",
   notice: "Loading auditor receipt route...",
@@ -89,7 +94,7 @@ function render() {
 
   notice.textContent = state.notice;
   route.textContent = state.quoteId
-    ? `Route: /audit.html?id=${state.quoteId}`
+    ? `Route: ${buildAuditUrl(state.quoteId, { absolute: false })}`
     : "Missing quote id in the URL. Open this page from a merchant receipt link.";
   statusChip.textContent = state.receipt ? "Receipt Ready" : state.quoteId ? "Missing Receipt" : "Invalid Quote";
   storeModeChip.textContent = `Store Mode: ${storeModeLabel}`;
@@ -98,7 +103,7 @@ function render() {
 
   if (backLink) {
     backLink.href = appendPrivateQuoteStoreMode(
-      `${window.location.origin}/app.html#private-quotes`,
+      buildAppUrl("private-quotes"),
       receiptStoreMode,
     ).toString();
   }

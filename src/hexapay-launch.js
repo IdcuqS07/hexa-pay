@@ -1052,7 +1052,7 @@ function renderPrivacyCard() {
         <button type="button" class="ha-btn ha-btn-secondary" data-command="sync-manifest" ${state.busyCommand === "sync-manifest" ? "disabled" : ""}>
           ${state.busyCommand === "sync-manifest" ? "Syncing..." : "Sync Manifest"}
         </button>
-        <a class="ha-btn ha-btn-ghost" href="./hexapay.html?entry=launch-app">Open Workspace</a>
+        <a class="ha-btn ha-btn-ghost" href="/workspace?entry=launch-app">Open Workspace</a>
       </div>
     </section>
   `;
@@ -1574,7 +1574,7 @@ function renderApp() {
         </div>
         <div class="ha-topbar-actions">
           ${renderTopbarWalletAction()}
-          <a class="ha-btn ha-btn-ghost" href="./hexapay.html?entry=launch-app">Workspace</a>
+          <a class="ha-btn ha-btn-ghost" href="/workspace?entry=launch-app">Workspace</a>
           <a class="ha-topbar-link" href="./index.html">Back to Home</a>
         </div>
       </header>

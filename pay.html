@@ -9,13 +9,26 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/app/styles.css">
+  <script>
+    (function () {
+      if (!/\/pay\.html\/?$/.test(window.location.pathname)) {
+        return;
+      }
+      const url = new URL(window.location.href);
+      const quoteId = url.searchParams.get("id");
+      const target = new URL(quoteId ? `/pay/${encodeURIComponent(quoteId)}` : "/pay", window.location.origin);
+      url.searchParams.delete("id");
+      target.search = url.searchParams.toString();
+      window.location.replace(`${target.pathname}${target.search}`);
+    })();
+  </script>
 </head>
 <body>
   <main class="main-content pay-main">
     <div class="pay-shell">
       <section class="app-toolbar">
         <div class="toolbar-copy">
-          <a class="text-btn" data-pay-back-link href="/app.html#private-quotes">Back to Private Quotes</a>
+          <a class="text-btn" data-pay-back-link href="/app/private-quotes">Back to Private Quotes</a>
           <span class="toolbar-kicker">Public Payment Route</span>
           <h1>Pay private quote</h1>
           <p class="toolbar-description" data-pay-notice>

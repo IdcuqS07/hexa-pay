@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HexaPay - Payment Intent Demo</title>
+    <script>
+      (function () {
+        if (!/\/payment-intent\.html\/?$/.test(window.location.pathname)) {
+          return;
+        }
+        const url = new URL(window.location.href);
+        window.location.replace(`/payment-intent${url.search}${url.hash}`);
+      })();
+    </script>
     <style>
       * {
         margin: 0;

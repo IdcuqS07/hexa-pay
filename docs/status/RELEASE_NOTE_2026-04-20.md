@@ -28,7 +28,7 @@ This release publishes the current HexaPay working stack to GitHub after the rep
 
 ### 3. Frontend and app surfaces
 
-- Added `pay.html`, `audit.html`, and `payment-intent.html` flows.
+- Added dedicated `/pay`, `/audit`, and `/payment-intent` flows with legacy `.html` compatibility entrypoints.
 - Added standalone auditor, payer, and payment-intent surfaces in the Vite app.
 - Added React frontend workspace under `frontend/` for private quotes and payment intent flows.
 

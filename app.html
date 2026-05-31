@@ -9,6 +9,15 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/app/styles.css">
+  <script>
+    (function () {
+      if (!/\/app\.html\/?$/.test(window.location.pathname)) {
+        return;
+      }
+      const view = (window.location.hash || "").replace(/^#/, "") || "dashboard";
+      window.location.replace(`/app/${encodeURIComponent(view)}${window.location.search}`);
+    })();
+  </script>
 </head>
 <body>
   <div class="app-shell">
@@ -55,7 +64,7 @@
       </div>
 
       <div class="nav-items">
-        <a href="#dashboard" class="nav-item active">
+        <a href="/app/dashboard" class="nav-item active">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
             <rect x="3" y="3" width="6" height="6" rx="1"/>
             <rect x="11" y="3" width="6" height="6" rx="1"/>
@@ -64,48 +73,48 @@
           </svg>
           <span>Dashboard</span>
         </a>
-        <a href="#send" class="nav-item">
+        <a href="/app/send" class="nav-item">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M18 2L9 11M18 2L12 18L9 11M18 2L2 8L9 11"/>
           </svg>
           <span>Send</span>
         </a>
-        <a href="#treasury" class="nav-item">
+        <a href="/app/treasury" class="nav-item">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
             <rect x="2" y="4" width="16" height="12" rx="2"/>
             <path d="M2 8H18"/>
           </svg>
           <span>Treasury</span>
         </a>
-        <a href="#invoices" class="nav-item">
+        <a href="/app/invoices" class="nav-item">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M5 2H15L18 5V18H5V2Z"/>
             <path d="M8 8H12M8 11H12M8 14H10"/>
           </svg>
           <span>Invoices</span>
         </a>
-        <a href="#private-quotes" class="nav-item">
+        <a href="/app/private-quotes" class="nav-item">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M10 2L16 5V9C16 12.8 13.6 15.9 10 17C6.4 15.9 4 12.8 4 9V5L10 2Z"/>
             <path d="M8 9.2L9.5 10.7L12.5 7.7"/>
           </svg>
           <span>Private Quotes</span>
         </a>
-        <a href="#policy" class="nav-item">
+        <a href="/app/policy" class="nav-item">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M10 2L17 5V10C17 14.2 14.3 17.4 10 18C5.7 17.4 3 14.2 3 10V5L10 2Z"/>
             <path d="M7.5 10L9.2 11.7L12.8 8.3"/>
           </svg>
           <span>Policy</span>
         </a>
-        <a href="#escrow" class="nav-item">
+        <a href="/app/escrow" class="nav-item">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
             <rect x="3" y="4" width="14" height="12" rx="2"/>
             <path d="M7 9H13M10 4V16"/>
           </svg>
           <span>Escrow</span>
         </a>
-        <a href="#compliance" class="nav-item">
+        <a href="/app/compliance" class="nav-item">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M6 3H14L17 6V17H3V3H6Z"/>
             <path d="M6 3V7H10"/>
@@ -113,7 +122,7 @@
           </svg>
           <span>Compliance</span>
         </a>
-        <a href="#analytics" class="nav-item">
+        <a href="/app/analytics" class="nav-item">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M4 16V10"/>
             <path d="M10 16V4"/>
@@ -121,7 +130,7 @@
           </svg>
           <span>Analytics</span>
         </a>
-        <a href="#activity" class="nav-item">
+        <a href="/app/activity" class="nav-item">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
             <circle cx="10" cy="10" r="8"/>
             <path d="M10 6V10L13 13"/>
@@ -169,7 +178,7 @@
             <button class="toolbar-btn" type="button" data-command="sync-manifest">
               Sync Manifest
             </button>
-            <a class="toolbar-btn" href="./hexapay.html?entry=launch-app">Workspace</a>
+            <a class="toolbar-btn" href="/workspace?entry=launch-app">Workspace</a>
           </div>
         </section>
 
@@ -405,7 +414,7 @@
                   </svg>
                 </div>
                 <div class="account-menu">
-                  <a class="account-link" href="./hexapay.html?entry=launch-app" aria-label="Open workspace">...</a>
+                  <a class="account-link" href="/workspace?entry=launch-app" aria-label="Open workspace">...</a>
                 </div>
               </div>
               <div class="account-name">Workflow Module</div>
@@ -426,7 +435,7 @@
                   </svg>
                 </div>
                 <div class="account-menu">
-                  <a class="account-link" href="#escrow" aria-label="Open escrow">...</a>
+                  <a class="account-link" href="/app/escrow" aria-label="Open escrow">...</a>
                 </div>
               </div>
               <div class="account-name">Escrow Module</div>
@@ -448,7 +457,7 @@
                   </svg>
                 </div>
                 <div class="account-menu">
-                  <a class="account-link" href="#compliance" aria-label="Open compliance">...</a>
+                  <a class="account-link" href="/app/compliance" aria-label="Open compliance">...</a>
                 </div>
               </div>
               <div class="account-name">Compliance Module</div>
@@ -470,7 +479,7 @@
                   </svg>
                 </div>
                 <div class="account-menu">
-                  <a class="account-link" href="#analytics" aria-label="Open analytics">...</a>
+                  <a class="account-link" href="/app/analytics" aria-label="Open analytics">...</a>
                 </div>
               </div>
               <div class="account-name">Analytics Module</div>
@@ -559,7 +568,7 @@
               <button class="toolbar-btn" type="button" data-command="copy-invoice-payment-link">
                 Copy Payment Link
               </button>
-              <a class="toolbar-btn" data-invoice-payment-link href="/pay.html" target="_blank" rel="noreferrer">
+              <a class="toolbar-btn" data-invoice-payment-link href="/pay" target="_blank" rel="noreferrer">
                 Open Payment Page
               </a>
             </div>
@@ -637,7 +646,7 @@
                   <div class="pq-field">
                     <div class="pq-label">QR Route</div>
                     <div class="pq-value mono">
-                      <a data-pos-qr-link href="/pay.html" target="_blank" rel="noreferrer">Open QR route</a>
+                      <a data-pos-qr-link href="/pay" target="_blank" rel="noreferrer">Open QR route</a>
                     </div>
                   </div>
                   <div class="pq-field">
@@ -676,7 +685,7 @@
                     <button class="toolbar-btn" type="button" data-command="refresh-pos-status" data-refresh-pos-status-button>
                       Refresh Status
                     </button>
-                    <a class="toolbar-btn primary" data-pos-open-link href="/pay.html" target="_blank" rel="noreferrer">
+                    <a class="toolbar-btn primary" data-pos-open-link href="/pay" target="_blank" rel="noreferrer">
                       Open Payer Preview
                     </a>
                   </div>
@@ -738,7 +747,7 @@
               <div class="pq-field">
                 <div class="pq-label">Payment Link</div>
                 <div class="pq-value mono">
-                  <a data-private-quote-link href="/pay.html" target="_blank" rel="noreferrer">Open route</a>
+                  <a data-private-quote-link href="/pay" target="_blank" rel="noreferrer">Open route</a>
                 </div>
               </div>
 
@@ -746,7 +755,7 @@
                 <button class="toolbar-btn" type="button" data-command="copy-private-quote-link">
                   Copy Link
                 </button>
-                <a class="toolbar-btn primary" data-private-quote-open-link href="/pay.html" target="_blank" rel="noreferrer">
+                <a class="toolbar-btn primary" data-private-quote-open-link href="/pay" target="_blank" rel="noreferrer">
                   Open Payer Page
                 </a>
               </div>
@@ -788,7 +797,7 @@
               <div class="pq-field">
                 <div class="pq-label">Receipt View</div>
                 <div class="pq-value mono">
-                  <a data-private-quote-receipt-link href="/pay.html" target="_blank" rel="noreferrer">Open receipt route</a>
+                  <a data-private-quote-receipt-link href="/pay" target="_blank" rel="noreferrer">Open receipt route</a>
                 </div>
               </div>
 
@@ -796,7 +805,7 @@
                 <a
                   class="toolbar-btn primary"
                   data-private-quote-receipt-open-link
-                  href="/pay.html"
+                  href="/pay"
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -805,7 +814,7 @@
                 <a
                   class="toolbar-btn"
                   data-private-quote-auditor-open-link
-                  href="/audit.html"
+                  href="/audit"
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -1138,7 +1147,7 @@
     </main>
 
     <nav class="bottom-nav">
-      <a href="#dashboard" class="bottom-nav-item active">
+      <a href="/app/dashboard" class="bottom-nav-item active">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="3" y="3" width="7" height="7" rx="1"/>
           <rect x="14" y="3" width="7" height="7" rx="1"/>
@@ -1147,41 +1156,41 @@
         </svg>
         <span>Home</span>
       </a>
-      <a href="#send" class="bottom-nav-item">
+      <a href="/app/send" class="bottom-nav-item">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"/>
         </svg>
         <span>Send</span>
       </a>
-      <a href="#invoices" class="bottom-nav-item">
+      <a href="/app/invoices" class="bottom-nav-item">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M5 2H15L18 5V18H5V2Z"/>
           <path d="M8 8H12M8 11H12M8 14H10"/>
         </svg>
         <span>Invoices</span>
       </a>
-      <a href="#private-quotes" class="bottom-nav-item">
+      <a href="/app/private-quotes" class="bottom-nav-item">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 3L19 7V11C19 15.4 16.2 19.1 12 20C7.8 19.1 5 15.4 5 11V7L12 3Z"/>
           <path d="M9.5 11.5L11.5 13.5L15 10"/>
         </svg>
         <span>Quotes</span>
       </a>
-      <a href="#policy" class="bottom-nav-item">
+      <a href="/app/policy" class="bottom-nav-item">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 3L20 7V12C20 16.6 16.9 20.3 12 21C7.1 20.3 4 16.6 4 12V7L12 3Z"/>
           <path d="M9.5 12L11.3 13.8L14.8 10.3"/>
         </svg>
         <span>Policy</span>
       </a>
-      <a href="#escrow" class="bottom-nav-item">
+      <a href="/app/escrow" class="bottom-nav-item">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="4" y="5" width="16" height="14" rx="2"/>
           <path d="M8 12H16M12 5V19"/>
         </svg>
         <span>Escrow</span>
       </a>
-      <a href="#compliance" class="bottom-nav-item">
+      <a href="/app/compliance" class="bottom-nav-item">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M7 4H15L19 8V20H7V4Z"/>
           <path d="M15 4V8H19"/>
@@ -1189,7 +1198,7 @@
         </svg>
         <span>Audit</span>
       </a>
-      <a href="#analytics" class="bottom-nav-item">
+      <a href="/app/analytics" class="bottom-nav-item">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M7 20V12"/>
           <path d="M12 20V5"/>
@@ -1197,7 +1206,7 @@
         </svg>
         <span>Analytics</span>
       </a>
-      <a href="#activity" class="bottom-nav-item">
+      <a href="/app/activity" class="bottom-nav-item">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10"/>
           <path d="M12 6V12L16 16"/>

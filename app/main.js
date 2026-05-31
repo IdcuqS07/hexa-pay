@@ -59,6 +59,15 @@ import {
   createShareablePaymentIntentUrl,
 } from "./payment-intent-share.js";
 import {
+  APP_ROUTE_VIEWS,
+  buildAppUrl,
+  buildAuditUrl,
+  buildPayIntentUrl,
+  buildPayUrl,
+  getAppViewFromLocation,
+  normalizeAppView,
+} from "./routes.js";
+import {
   getStoredWalletProviderId,
   isWalletSessionEnabled,
   setStoredWalletProviderId,
@@ -72,18 +81,7 @@ const RECENT_ACTIVITY_STORAGE_KEY = "hexapay_recent_activity_v1";
 const POS_REQUEST_STORAGE_KEY = "hexapay_pos_request_v1";
 const POS_REQUEST_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const POS_REQUEST_STATUS_POLL_INTERVAL_MS = 15_000;
-const APP_VIEWS = new Set([
-  "dashboard",
-  "send",
-  "treasury",
-  "invoices",
-  "private-quotes",
-  "policy",
-  "escrow",
-  "compliance",
-  "analytics",
-  "activity",
-]);
+const APP_VIEWS = new Set(APP_ROUTE_VIEWS);
 
 const state = {
   activeView: getInitialView(),
@@ -173,8 +171,7 @@ function getInitialView() {
     return "dashboard";
   }
 
-  const view = String(window.location.hash || "").replace(/^#/, "");
-  return APP_VIEWS.has(view) ? view : "dashboard";
+  return getAppViewFromLocation(window.location);
 }
 
 function createDefaultRuntime() {
@@ -345,18 +342,19 @@ function setNotice(summary, tone = "muted") {
 }
 
 function normalizeView(view) {
-  const normalized = String(view || "").replace(/^#/, "");
-  return APP_VIEWS.has(normalized) ? normalized : "dashboard";
+  return normalizeAppView(view);
 }
 
-function updateViewHash(view) {
+function updateViewRoute(view) {
   if (typeof window === "undefined") {
     return;
   }
 
   const url = new URL(window.location.href);
-  url.hash = view;
-  window.history.replaceState({}, "", url);
+  const target = new URL(buildAppUrl(view), window.location.origin);
+  url.pathname = target.pathname;
+  url.hash = "";
+  window.history.replaceState({}, "", `${url.pathname}${url.search}`);
 }
 
 function setActiveView(view, { updateHash = true, scrollTop = true } = {}) {
@@ -365,7 +363,7 @@ function setActiveView(view, { updateHash = true, scrollTop = true } = {}) {
   syncPosRequestStatusPolling({ forceRefresh: normalized === "private-quotes" });
 
   if (updateHash) {
-    updateViewHash(normalized);
+    updateViewRoute(normalized);
   }
 
   if (scrollTop) {
@@ -488,10 +486,7 @@ function normalizeStoredPosRequest(value = {}) {
     value.deviceFingerprintHash || payload.deviceFingerprintHash || "",
   ).trim();
   const merchantAddress = String(value.merchantAddress || payload.merchantAddress || "").trim();
-  const baseUrl = createShareablePaymentIntentUrl(
-    payload,
-    `${window.location.origin}/pay.html`,
-  );
+  const baseUrl = createShareablePaymentIntentUrl(payload, buildPayIntentUrl());
   const linkUrl = String(value.linkUrl || appendPaymentEntry(baseUrl, "direct")).trim();
   const qrUrl = String(value.qrUrl || appendPaymentEntry(baseUrl, "qr")).trim();
   const qrDataUrl = String(value.qrDataUrl || "").trim();
@@ -1525,7 +1520,7 @@ function getInvoicePaymentLink() {
     return "";
   }
 
-  return createShareablePaymentIntentUrl(payload, `${window.location.origin}/pay.html`);
+  return createShareablePaymentIntentUrl(payload, buildPayIntentUrl());
 }
 
 async function readInvoiceSnapshotFromChain(invoiceId) {
@@ -2184,10 +2179,7 @@ async function handleCopyInvoicePaymentLink() {
 
 async function generateMerchantPosRequest() {
   const context = getMerchantPosContext();
-  const baseUrl = createShareablePaymentIntentUrl(
-    context.payload,
-    `${window.location.origin}/pay.html`,
-  );
+  const baseUrl = createShareablePaymentIntentUrl(context.payload, buildPayIntentUrl());
   const linkUrl = appendPaymentEntry(baseUrl, "direct");
   const qrUrl = appendPaymentEntry(baseUrl, "qr");
   const qrDataUrl = await QRCode.toDataURL(qrUrl, {
@@ -3660,7 +3652,7 @@ function renderPrivateQuoteSummary() {
   } else if (state.runtime.chainId !== config.chainId) {
     helper.textContent = `Wallet is on ${walletChain}. Switch to ${moduleChain} to create a private quote.`;
   } else {
-    helper.textContent = `Private quote module ready on ${moduleChain}. Share the generated /pay.html route with the payer.`;
+    helper.textContent = `Private quote module ready on ${moduleChain}. Share the generated /pay route with the payer.`;
   }
 
   summary.innerHTML = `
@@ -3725,9 +3717,10 @@ function renderPrivateQuoteSummary() {
   const receiptViewHref =
     latestReceipt.paymentLink ||
     latestQuote?.link ||
-    (latestReceipt.quoteId
-      ? `${window.location.origin}/pay.html?id=${encodeURIComponent(latestReceipt.quoteId)}`
-      : `${window.location.origin}/pay.html`);
+    appendPrivateQuoteStoreMode(
+      latestReceipt.quoteId ? buildPayUrl(latestReceipt.quoteId) : buildPayUrl(),
+      receiptStoreMode,
+    ).toString();
 
   if (receiptLink) {
     receiptLink.textContent = receiptViewHref;
@@ -3741,10 +3734,10 @@ function renderPrivateQuoteSummary() {
   if (auditorOpenLink) {
     const auditorViewHref = latestReceipt?.quoteId
       ? appendPrivateQuoteStoreMode(
-          `${window.location.origin}/audit.html?id=${encodeURIComponent(latestReceipt.quoteId)}`,
+          buildAuditUrl(latestReceipt.quoteId),
           receiptStoreMode,
         ).toString()
-      : appendPrivateQuoteStoreMode(`${window.location.origin}/audit.html`, receiptStoreMode).toString();
+      : appendPrivateQuoteStoreMode(buildAuditUrl(), receiptStoreMode).toString();
 
     auditorOpenLink.href = auditorViewHref;
   }
@@ -3856,7 +3849,7 @@ function renderInvoiceSummary() {
       helper.textContent = "Load an invoice, reveal the outstanding amount, then move it into the payment rail.";
     }
     if (paymentLink) {
-      paymentLink.href = "/pay.html";
+      paymentLink.href = buildPayIntentUrl({ absolute: false });
       paymentLink.setAttribute("aria-disabled", "true");
     }
     renderInvoiceReconciliationDetail(null, null);
@@ -3976,7 +3969,7 @@ function renderInvoiceSummary() {
   }
 
   if (paymentLink) {
-    paymentLink.href = invoicePaymentLink || "/pay.html";
+    paymentLink.href = invoicePaymentLink || buildPayIntentUrl({ absolute: false });
     paymentLink.toggleAttribute("aria-disabled", !invoicePaymentLink);
   }
 
@@ -4953,10 +4946,13 @@ function bindEvents() {
       return;
     }
 
-    const anchor = event.target.closest('a[href^="#"]');
+    const anchor = event.target.closest('a[href^="#"], a[href^="/app/"]');
 
     if (anchor) {
-      const view = normalizeView(anchor.getAttribute("href"));
+      const href = anchor.getAttribute("href") || "";
+      const view = href.startsWith("/app/")
+        ? getAppViewFromLocation(new URL(href, window.location.origin))
+        : normalizeView(href);
 
       if (APP_VIEWS.has(view)) {
         event.preventDefault();
@@ -5013,16 +5009,20 @@ function bindEvents() {
     }
   });
 
-  window.addEventListener("hashchange", () => {
-    setActiveView(window.location.hash, { updateHash: false, scrollTop: false });
-    if (normalizeView(window.location.hash) === "activity") {
+  const syncLocationView = () => {
+    const nextView = getAppViewFromLocation(window.location);
+    setActiveView(nextView, { updateHash: false, scrollTop: false });
+    if (nextView === "activity") {
       Promise.all([
         syncPaymentHistory({ silent: true }),
         syncReconciliationRecords({ silent: true }),
       ]).then(() => render());
     }
     render();
-  });
+  };
+
+  window.addEventListener("hashchange", syncLocationView);
+  window.addEventListener("popstate", syncLocationView);
 
   document.addEventListener("fullscreenchange", () => {
     render();
@@ -5082,6 +5082,8 @@ async function bootstrap() {
   state.recentActivity = loadRecentActivity();
   state.posRequest = loadStoredPosRequest();
   state.posRequestStatus = createDefaultPosRequestStatus();
+
+  updateViewRoute(state.activeView);
 
   if (state.posRequest) {
     syncPosRequestFormFields();

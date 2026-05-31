@@ -10,7 +10,7 @@ This guide matches the live Arbitrum Sepolia payment rail that is currently veri
 
 ## What Uses What
 
-- Browser UI at `app.html` and `payment-intent.html` uses the wallet currently connected in MetaMask or Rabby.
+- Browser UI at `/app/dashboard` and `/payment-intent` uses the wallet currently connected in MetaMask or Rabby.
 - `TEST_PAYER_PRIVATE_KEY` is only used by the CLI runner `npm run test:payment-flow`.
 - EIP-712 signatures must use the `domain` returned by `POST /api/payments/challenges`.
 - Wave 5 SDK entrypoints live at `sdk/hexapay-sdk.cjs` and `sdk/hexapay-sdk.mjs`.
@@ -97,7 +97,7 @@ If `TEST_PAYER_PRIVATE_KEY` is missing, the runner falls back to a default Hardh
 
 ### Option B: Browser Test
 
-1. Open `http://localhost:3000/app.html`
+1. Open `http://localhost:3000/app/dashboard`
 2. Connect the browser wallet you want to pay from
 3. Ensure the wallet is on Arbitrum Sepolia
 4. Ensure the wallet has testnet ETH and USDC
