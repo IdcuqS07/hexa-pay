@@ -75,7 +75,8 @@ npm run forge:test                   # All tests
 ### Deploy
 ```bash
 npm run forge:deploy                 # Deploy mock version
-npm run forge:deploy:cofhe           # Deploy CoFHE version
+npm run forge:deploy:cofhe           # Deploy CoFHE version locally
+npm run forge:deploy:cofhe:arb-sepolia # Deploy CoFHE version to Arbitrum Sepolia
 ```
 
 ---
@@ -111,6 +112,7 @@ npm run forge:test:cofhe
 ```bash
 # Deploy CoFHE-compatible version
 npm run forge:deploy:cofhe
+npm run forge:deploy:cofhe:arb-sepolia
 ```
 
 ---
@@ -178,5 +180,5 @@ script/
 1. ✅ Run mock tests: `npm run forge:test:mock`
 2. Install CoFHE plugin: `npm install @cofhe/foundry-plugin`
 3. Run CoFHE tests: `npm run forge:test:cofhe`
-4. Deploy to testnet: `npm run forge:deploy:cofhe`
+4. Deploy to testnet: `npm run forge:deploy:cofhe:arb-sepolia`
 5. Integrate with React frontend

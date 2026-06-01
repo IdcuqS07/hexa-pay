@@ -26,6 +26,17 @@ ARBISCAN_API_KEY=
 HEXAPAY_EXECUTOR_PRIVATE_KEY=
 ARB_SEPOLIA_RPC_URL=https://sepolia-rollup.arbitrum.io/rpc
 
+# CoFHE / private quote deployment
+# Keep FHE_ALLOW_MOCK=1 locally. Set it to 0 for remote/provider-backed deploy flows.
+FHE_PROVIDER_URL=
+FHE_PRIVATE_KEY=
+FHE_KEY_ID=
+FHE_ALLOW_MOCK=1
+FHE_REQUEST_TIMEOUT_MS=15000
+DEPLOYMENT_NETWORK_NAME=arb-sepolia
+# Optional override; unset defaults to requiring remote FHE env on non-local chains.
+# COFHE_DEPLOY_REQUIRE_REMOTE_FHE=true
+
 # Redis (if using)
 MOCK_RECEIPT_CANONICAL_MODE=redis
 MOCK_RECEIPT_CHALLENGE_MODE=redis

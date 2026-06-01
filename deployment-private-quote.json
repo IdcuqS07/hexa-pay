@@ -1,10 +1,23 @@
 {
   "network": "arb-sepolia",
   "chainId": 421614,
-  "timestamp": "2026-04-20T05:22:01.166Z",
+  "deployedAtUnix": 1780332087,
   "deployer": "0x7119d53f0241F16c96b521ccF862473e18a29d6b",
+  "privateQuote": "0x0DbEE901D3b401968A48E3bcCc75a12f8588C8E3",
   "contracts": {
-    "MockCreditAdapter": "0x29656Ca4652b16Eb204Ac9F57a3bFB0fa92B29Ef",
-    "PrivateMerchantQuote": "0xaFF536f464162067ad401a2C2992DB1f58751093"
+    "MockCreditAdapter": "0xcdE28B6203ebE6710e22ce5Ae162D402607DE623",
+    "PrivateMerchantQuote": "0x0DbEE901D3b401968A48E3bcCc75a12f8588C8E3",
+    "PrivateMerchantQuoteCofhe": "0x0DbEE901D3b401968A48E3bcCc75a12f8588C8E3"
+  },
+  "cofhe": {
+    "mode": "bytes32-handle",
+    "fheProviderUrlConfigured": false,
+    "mockAllowed": true
+  },
+  "ui": {
+    "chainId": 421614,
+    "addresses": {
+      "privateQuote": "0x0DbEE901D3b401968A48E3bcCc75a12f8588C8E3"
+    }
   }
 }

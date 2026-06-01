@@ -435,6 +435,22 @@ Outcome:
 Demo story:
 - CFO sees total payroll, liabilities, and invoice exposure without exposing raw payments
 
+## Milestone G: "Operational privacy infrastructure"
+
+Scope:
+- signed webhooks
+- reconciliation exception queue
+- merchant API key and terminal management
+- health checks, delivery logs, and alerts
+
+Outcome:
+- HexaPay becomes operable as a production finance platform, not only a demo or integration surface
+
+Demo story:
+- merchant receives signed settlement webhooks
+- failed reconciliation enters a review queue instead of silently stalling
+- operator rotates a terminal secret without breaking the rest of the merchant setup
+
 ## Build order recommendation
 
 If you want the fastest path to a compelling demo and a strong product story, the order should be:

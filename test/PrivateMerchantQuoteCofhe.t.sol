@@ -1,0 +1,219 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import "forge-std/Test.sol";
+import {CoFheTest} from "@fhenixprotocol/cofhe-mock-contracts/CoFheTest.sol";
+import {InEuint64} from "@fhenixprotocol/cofhe-contracts/ICofhe.sol";
+
+import {PrivateMerchantQuote} from "../src/PrivateMerchantQuote.sol";
+
+contract MockCreditAdapterCofhe {
+    bool public forceApprove = true;
+
+    event CreditConsumed(address indexed user);
+
+    function setForceApprove(bool v) external {
+        forceApprove = v;
+    }
+
+    // NOTE: Adjust argument types to match your contract's encrypted amount type
+    function canSpend(address, bytes32) external view returns (bool) {
+        return forceApprove;
+    }
+
+    function consume(address user, bytes32) external {
+        require(forceApprove, "InsufficientCredit");
+        emit CreditConsumed(user);
+    }
+}
+
+contract PrivateMerchantQuoteCofheTest is CoFheTest {
+    PrivateMerchantQuote internal quote;
+    MockCreditAdapterCofhe internal credit;
+
+    address internal merchant = address(0x1001);
+    address internal payer = address(0x1002);
+    address internal other = address(0x1003);
+
+    address internal merchantClient;
+    address internal payerClient;
+
+    bytes32 internal quoteId;
+    uint64 internal expiry;
+
+    function setUp() public {
+        credit = new MockCreditAdapterCofhe();
+        quote = new PrivateMerchantQuote(address(credit));
+
+        merchantClient = merchant;
+        payerClient = payer;
+
+        quoteId = keccak256("QUOTE_1");
+        expiry = uint64(block.timestamp + 1 days);
+    }
+
+    // -------------------------------------------------
+    // Helpers
+    // -------------------------------------------------
+
+    function _encryptAmount(
+        address client,
+        uint64 value
+    ) internal returns (bytes32 encryptedHandle) {
+        // Use CoFheTest helper to create encrypted uint64 input
+        InEuint64 memory input = this.createInEuint64(value, 0, client);
+        encryptedHandle = bytes32(input.ctHash);
+    }
+
+    function _createQuote() internal returns (bytes32 amountCt) {
+        amountCt = _encryptAmount(merchantClient, 100);
+
+        vm.prank(merchant);
+        quote.createQuote(
+            quoteId,
+            payer,
+            amountCt,
+            expiry
+        );
+    }
+
+    // -------------------------------------------------
+    // Core Happy Path Tests (Minimum Target)
+    // -------------------------------------------------
+
+    function test_CreateQuote_Success() public {
+        _createQuote();
+
+        (
+            address storedMerchant,
+            address storedPayer,
+            uint64 storedExpiry,
+            uint8 status,
+            bool accessGranted
+        ) = quote.getQuote(quoteId);
+
+        assertEq(storedMerchant, merchant);
+        assertEq(storedPayer, payer);
+        assertEq(storedExpiry, expiry);
+        assertEq(status, 1); // Pending
+        assertEq(accessGranted, false);
+    }
+
+    function test_GrantAccess_Success() public {
+        _createQuote();
+
+        vm.prank(merchant);
+        quote.grantAccess(quoteId, payer);
+
+        (, , , , bool accessGranted) = quote.getQuote(quoteId);
+        assertTrue(accessGranted);
+    }
+
+    function test_SettleQuote_Success() public {
+        _createQuote();
+
+        vm.prank(merchant);
+        quote.grantAccess(quoteId, payer);
+
+        vm.prank(payer);
+        quote.settleQuote(quoteId, false);
+
+        (, , , uint8 status, ) = quote.getQuote(quoteId);
+        assertEq(status, 2); // Settled
+    }
+
+    function test_SettleQuote_RevertWhenWrongPayer() public {
+        _createQuote();
+
+        vm.prank(merchant);
+        quote.grantAccess(quoteId, payer);
+
+        vm.prank(other);
+        vm.expectRevert();
+        quote.settleQuote(quoteId, false);
+    }
+
+    // -------------------------------------------------
+    // Additional Happy Path Tests
+    // -------------------------------------------------
+
+    function test_SettleQuote_Success_WithSkipPreview() public {
+        _createQuote();
+
+        vm.prank(payer);
+        quote.settleQuote(quoteId, true);
+
+        (, , , uint8 status, ) = quote.getQuote(quoteId);
+        assertEq(status, 2); // Settled
+    }
+
+    function test_CancelExpired_Success() public {
+        _createQuote();
+
+        vm.warp(block.timestamp + 2 days);
+
+        vm.prank(merchant);
+        quote.cancelExpired(quoteId);
+
+        (, , , uint8 status, ) = quote.getQuote(quoteId);
+        assertEq(status, 3); // Cancelled
+    }
+
+    // -------------------------------------------------
+    // Negative Cases
+    // -------------------------------------------------
+
+    function test_CreateQuote_RevertOnDuplicateId() public {
+        _createQuote();
+
+        bytes32 amountCt2 = _encryptAmount(merchantClient, 200);
+
+        vm.prank(merchant);
+        vm.expectRevert();
+        quote.createQuote(
+            quoteId,
+            payer,
+            amountCt2,
+            expiry
+        );
+    }
+
+    function test_GrantAccess_RevertWhenNotMerchant() public {
+        _createQuote();
+
+        vm.prank(other);
+        vm.expectRevert();
+        quote.grantAccess(quoteId, payer);
+    }
+
+    function test_SettleQuote_RevertWhenExpired() public {
+        _createQuote();
+
+        vm.warp(block.timestamp + 2 days);
+
+        vm.prank(payer);
+        vm.expectRevert();
+        quote.settleQuote(quoteId, true);
+    }
+
+    function test_SettleQuote_RevertWhenNoAccessAndNoSkipPreview() public {
+        _createQuote();
+
+        vm.prank(payer);
+        vm.expectRevert();
+        quote.settleQuote(quoteId, false);
+    }
+
+    function test_SettleQuote_RevertWhenInsufficientCredit() public {
+        _createQuote();
+
+        credit.setForceApprove(false);
+
+        vm.prank(merchant);
+        quote.grantAccess(quoteId, payer);
+
+        vm.prank(payer);
+        vm.expectRevert();
+        quote.settleQuote(quoteId, false);
+    }
+}

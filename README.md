@@ -56,6 +56,7 @@ Current deployment target: `Arbitrum Sepolia`
 - Escrow Module: [`0x1E23DCbdd5da2ADF0Bf8904214463087b61a1C0d`](https://sepolia.arbiscan.io/address/0x1E23DCbdd5da2ADF0Bf8904214463087b61a1C0d)
 - Compliance Module: [`0x0472D8e66E695c77C923938D69157CF60457650E`](https://sepolia.arbiscan.io/address/0x0472D8e66E695c77C923938D69157CF60457650E)
 - Analytics Module: [`0x2C53EFE001fBB50473934f175d9617C6Ab54252E`](https://sepolia.arbiscan.io/address/0x2C53EFE001fBB50473934f175d9617C6Ab54252E)
+- Intent Executor: [`0xD3cBE1F9A84E96DF340bef7b9D2B7C466Eb29d55`](https://sepolia.arbiscan.io/address/0xD3cBE1F9A84E96DF340bef7b9D2B7C466Eb29d55)
 - Default Testnet Settlement Token: [`0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d`](https://sepolia.arbiscan.io/address/0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d)
 
 Source of truth for the suite deployment above: [`deployment.json`](./deployment.json)
@@ -64,7 +65,7 @@ Source of truth for the suite deployment above: [`deployment.json`](./deployment
 
 The currently verified live payment rail on Arbitrum Sepolia uses:
 
-- `HexaPayUSDCExecutor`: [`0xD3cBE1F9A84E96DF340bef7b9D2B7C466Eb29d55`](https://sepolia.arbiscan.io/address/0xD3cBE1F9A84E96DF340bef7b9D2B7C466Eb29d55)
+- `HexaPayUSDCExecutor`: [`0xD3cBE1F9A84E96DF340bef7b9D2B7C466Eb29d55`](https://sepolia.arbiscan.io/address/0xD3cBE1F9A84E96DF340bef7b9D2B7C466Eb29d55) — Simple execution with deduplication protection
 - Settlement token: [`0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d`](https://sepolia.arbiscan.io/address/0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d)
 
 Latest live verification in this repo:
@@ -79,13 +80,18 @@ Important runtime notes:
 - `TEST_PAYER_PRIVATE_KEY` is only used by the CLI runner `npm run test:payment-flow`.
 - EIP-712 signing must use the `domain` returned by `POST /api/payments/challenges`.
 - For wallet stability on Arbitrum Sepolia, prefer `https://sepolia-rollup.arbitrum.io/rpc`.
+- The FHE API service reads `FHE_PROVIDER_URL`, `FHE_PRIVATE_KEY`, and optional `FHE_KEY_ID`.
+- Keep `FHE_ALLOW_MOCK=1` for local development; production should set it to `0` alongside the provider URL and private key.
+- `npm run forge:deploy:cofhe` deploys the CoFHE private-quote contract locally and writes `deployment-private-quote.json` plus `public/deployment-private-quote.json`.
+- `npm run forge:deploy:cofhe:arb-sepolia` targets `ARB_SEPOLIA_RPC`; set `FHE_PROVIDER_URL`, `FHE_PRIVATE_KEY`, and `FHE_ALLOW_MOCK=0` for provider-backed deploy checks.
+- `GET /api/fhe/health` reports `mock`, `remote`, or `degraded` depending on the configured provider.
 
 ## Repository Layout
 
 ```text
 Fhenix Buildathon/
 ├── docs/                   # Roadmaps, status notes, and private-quote documentation
-├── contracts/              # HexaPay core, workflow, escrow, compliance, analytics, vault, factory
+├── contracts/              # HexaPay core, workflow, escrow, compliance, analytics, vault, factory, executor, bridge
 ├── scripts/                # Deployment, wallet setup, wrap bootstrap, and interaction helpers
 ├── sdk/                    # Wave 5 developer SDK for create/sign/verify/execute flows
 ├── src/                    # App, workspace, client runtime, and shared styling
@@ -132,6 +138,8 @@ npm run test
 # Deployment and setup
 npm run deploy
 npm run deploy:token
+npm run forge:deploy:cofhe
+npm run forge:deploy:cofhe:arb-sepolia
 npm run bootstrap-wrap
 npm run bootstrap-unwrap
 npm run setup-wallet
@@ -143,12 +151,14 @@ npm run interact
 HexaPay is structured as a modular confidential finance suite:
 
 - `HexaPay.sol`: confidential balance rail, async unwrap requests, private transfers, compliance base, company registry
-- `HexaPayWorkflowModule.sol`: confidential invoices, payroll, and policy-based approvals
+- `HexaPayWorkflowWriteDelegate.sol`: confidential invoices, payroll, and policy-based approvals
 - `HexaPayEscrowModule.sol`: escrow funding, milestone release, refunds, disputes
 - `HexaPayComplianceModule.sol`: scoped compliance rooms, audit artifacts, access logs
-- `HexaPayAnalyticsModule.sol`: sealed reporting and checkpoint flows
+- `HexaPayAnalyticsModule.sol`: sealed reporting and checkpoint flows, spending analytics, exposure tracking
 - `HexaPayVault.sol`: settlement token custody
 - `HexaPayFactory.sol`: suite deployment
+- `HexaPayUSDCExecutor.sol`: payment intent execution with deduplication protection
+- `HexaPayIntentBridge.sol`: external payment intent bridge for QR checkout flows
 
 More detail is documented in [README_CONTRACTS.md](./README_CONTRACTS.md).
 

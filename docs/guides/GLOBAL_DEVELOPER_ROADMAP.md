@@ -14,6 +14,7 @@ This roadmap turns HexaPay from a working private-finance prototype into a real 
 - product-grade merchant and payer flows
 - real-world merchant entry points such as QR and POS
 - protocol and ecosystem primitives for external integration
+- production operations, monitoring, and enterprise automation
 
 ## Roadmap Rules
 
@@ -28,6 +29,7 @@ This roadmap turns HexaPay from a working private-finance prototype into a real 
 2. Wave 3 turns those primitives into a product experience.
 3. Wave 4 adds merchant-grade entry hardware and POS flows.
 4. Wave 5 turns the system into a reusable platform and protocol surface.
+5. Wave 6 makes the platform production-operable with reliable event delivery, reconciliation automation, and enterprise controls.
 
 ## Milestone: Wave 2 — Payment Core & Settlement
 
@@ -355,6 +357,82 @@ Title:
 - external developers can integrate HexaPay
 - SDK is usable
 - protocol is documented
+
+## Milestone: Wave 6 — Operations, Reliability & Enterprise Automation
+
+### Goal
+
+Turn HexaPay from an integratable platform into an operable production system.
+
+### Issue Breakdown
+
+#### Event Delivery
+
+1. Signed Webhooks
+
+Title:
+- `feat(api): add signed webhook delivery for payment and reconciliation events`
+
+Tasks:
+- support merchant webhook subscriptions
+- sign payloads with per-merchant secrets
+- retry failed deliveries with backoff and dead-letter tracking
+
+#### Reconciliation Ops
+
+2. Reconciliation Automation
+
+Title:
+- `feat(reconciliation): automate settlement receipt recording and exception review`
+
+Tasks:
+- auto-detect eligible settled records
+- enqueue ambiguous or failed candidates for operator review
+- add replay-safe resolution flow for reconciliation exceptions
+
+#### Platform Controls
+
+3. Merchant Admin Controls
+
+Title:
+- `feat(ops): add API key, terminal, and environment management`
+
+Tasks:
+- issue and revoke scoped API keys
+- rotate terminal bindings and webhook secrets
+- separate sandbox and production merchant configuration
+
+#### Observability
+
+4. Operational Visibility
+
+Title:
+- `feat(ops): add delivery logs, health endpoints, and operator alerts`
+
+Tasks:
+- expose webhook delivery history
+- add health and readiness endpoints for payment services
+- alert on failed deliveries, stuck reconciliations, and degraded dependencies
+
+#### Platform Safety
+
+5. Abuse Protection
+
+Title:
+- `feat(security): enforce rate limiting, tenant isolation, and request tracing`
+
+Tasks:
+- add per-key and per-merchant rate limits
+- ensure tenant-scoped reads and writes across API surfaces
+- attach request and reconciliation trace ids for support workflows
+
+### Definition of Done
+
+- integrators receive signed lifecycle events reliably
+- settlement exceptions move into a visible operator review queue
+- merchants can rotate keys, secrets, and terminal bindings safely
+- service health, failed deliveries, and degraded workflows are observable
+- the platform is ready for controlled pilot operations
 
 ## Cross-Wave Implementation Notes
 

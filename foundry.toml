@@ -11,7 +11,14 @@ fs_permissions = [{ access = "read-write", path = "./" }]
 
 [rpc_endpoints]
 local = "http://127.0.0.1:8545"
-fhenix_testnet = "${FHENIX_RPC_URL}"
+arb_sepolia = "${ARB_SEPOLIA_RPC}"
+fhenix_testnet = "${ARB_SEPOLIA_RPC}"
 
 [profile.ci]
 verbosity = 4
+
+[fuzz]
+runs = 256
+
+[invariant]
+runs = 256

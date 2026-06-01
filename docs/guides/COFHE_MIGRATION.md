@@ -171,7 +171,7 @@ forge test --match-contract PrivateMerchantQuoteCofheTest -vv
 
 ### Phase 3: Deploy to Fhenix Testnet
 ```bash
-forge script script/DeployCofhe.s.sol --rpc-url fhenix_testnet --broadcast
+forge script script/DeployCofhe.s.sol:DeployCofhe --rpc-url arb_sepolia --broadcast
 ```
 - ✅ Real FHE network
 - ✅ End-to-end validation
@@ -225,8 +225,14 @@ forge test --match-contract PrivateMerchantQuoteCofheTest -vv
 ### For Deployment
 ```bash
 # Use CoFHE-compatible contract
-forge script script/DeployCofhe.s.sol --rpc-url fhenix_testnet --broadcast
+npm run forge:deploy:cofhe:arb-sepolia
 ```
+
+`script/DeployCofhe.s.sol` writes both `deployment-private-quote.json` and
+`public/deployment-private-quote.json` after deployment so the app can load the
+new private quote address directly. For remote/provider-backed deploy checks,
+set `ARB_SEPOLIA_RPC`, `FHE_PROVIDER_URL`, `FHE_PRIVATE_KEY`, and
+`FHE_ALLOW_MOCK=0`.
 
 ## Contract Interface Compatibility
 
